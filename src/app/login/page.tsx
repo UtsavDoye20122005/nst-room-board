@@ -100,7 +100,7 @@ export default function LoginPage() {
         <div className="card p-6">
           <h1 className="text-xl font-semibold">Sign in</h1>
           <p className="mt-1.5 text-[13.5px] text-muted">
-            Use the ID and password you were given. Students don&apos;t sign in here — room and time changes go out on Slack.
+            Use the ID and password you were given.
           </p>
 
           {error ? (

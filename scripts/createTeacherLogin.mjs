@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // ============================================================
-//  npm run create-teacher-login -- <id> <password> "<Name>" "<subjects>" "<years>"
+//  npm run create-teacher-login -- <id> <password> "<Name>"
 //
 //  Creates (or updates) a teacher login that needs no newtonschool.co
 //  inbox and no OTP step - just an ID and a password, from the ID +
@@ -8,20 +8,23 @@
 //  admin login already uses, see createAdminLogin.mjs and
 //  src/lib/firebase.ts's idLoginEmail()).
 //
-//  Example - Ashwin, teaching PSP to 1st year and ADA to 2nd year:
-//    npm run create-teacher-login -- ashwin "Ashwin@123" "Ashwin" "PSP,ADA" "1,2"
+//  Example:
+//    npm run create-teacher-login -- shubham.sagar "shubhamsagar@123" "Shubham Sagar"
 //
-//  <subjects> is comma-separated, matching SUBJECT_SUGGESTIONS in
-//  src/data/campusSeed.json (add a new one there first if it's not
-//  in the list yet). <years> is comma-separated numbers, e.g. "1,2"
-//  for someone who teaches both.
+//  Subjects and years aren't asked for here - leave them unset and
+//  fix them later from Admin -> People -> Edit subjects, whenever
+//  you're ready. Until then, that person's Subject field on a
+//  booking is just a free-text box instead of a dropdown (no
+//  dropdown to build without a subject list) - everything else
+//  works exactly the same.
 //
-//  Safe to run again for the same id - it updates the password,
-//  name, subjects and years instead of failing. This sets the
-//  Firestore profile directly (role: faculty), so whoever signs in
-//  lands straight on a working board - no onboarding form, since
-//  there's no real inbox behind this account for onboarding to
-//  make sense of.
+//  Safe to run again for the same id - it updates the password and
+//  name instead of failing, and never touches subjects/years that
+//  were already set some other way (e.g. from Admin -> People).
+//  This sets the Firestore profile directly (role: faculty), so
+//  whoever signs in lands straight on a working board - no
+//  onboarding form, since there's no real inbox behind this account
+//  for onboarding to make sense of.
 //
 //  Store the name WITHOUT a "Sir"/"Mam" suffix (e.g. "Ashwin", not
 //  "Ashwin Sir") - the Admin -> Timetable dropdown adds that itself
@@ -39,32 +42,16 @@ requireAdminEnv();
 const id = (process.argv[2] || "").trim().toLowerCase();
 const password = process.argv[3] || "";
 const displayName = (process.argv[4] || "").trim();
-const subjects = (process.argv[5] || "")
-  .split(",")
-  .map((s) => s.trim())
-  .filter(Boolean);
-const years = (process.argv[6] || "")
-  .split(",")
-  .map((y) => Number(y.trim()))
-  .filter((y) => Number.isFinite(y) && y > 0);
 
 if (!id || !password || !displayName) {
   console.error(
-    "\n  Usage: npm run create-teacher-login -- <id> <password> \"<Name>\" \"<subjects>\" \"<years>\"\n" +
-      "  Example: npm run create-teacher-login -- ashwin \"Ashwin@123\" \"Ashwin\" \"PSP,ADA\" \"1,2\"\n"
+    "\n  Usage: npm run create-teacher-login -- <id> <password> \"<Name>\"\n" +
+      "  Example: npm run create-teacher-login -- shubham.sagar \"shubhamsagar@123\" \"Shubham Sagar\"\n"
   );
   process.exit(1);
 }
 if (password.length < 8) {
   console.error("\n  Password must be at least 8 characters (Firebase's own minimum).\n");
-  process.exit(1);
-}
-if (subjects.length === 0) {
-  console.error("\n  Give at least one subject, comma-separated (e.g. \"PSP,ADA\").\n");
-  process.exit(1);
-}
-if (years.length === 0) {
-  console.error("\n  Give at least one year, comma-separated (e.g. \"1,2\").\n");
   process.exit(1);
 }
 
@@ -89,7 +76,7 @@ async function main() {
     const existing = await auth.getUserByEmail(email);
     await auth.updateUser(existing.uid, { password, displayName });
     uid = existing.uid;
-    console.log("  Login \"" + id + "\" already existed - password, name, subjects and years updated.");
+    console.log("  Login \"" + id + "\" already existed - password and name updated.");
   } catch (e) {
     if (e.code !== "auth/user-not-found") throw e;
     const created = await auth.createUser({ email, password, displayName, emailVerified: true });
@@ -98,14 +85,15 @@ async function main() {
   }
 
   const now = Date.now();
+  // merge:true, and subjects/years deliberately left out of this write
+  // entirely (not even as []) so re-running this for someone who
+  // already has subjects set from Admin -> People doesn't wipe them.
   await db.collection("users").doc(uid).set(
     {
       uid,
       email,
       name: displayName,
       role: "faculty",
-      subjects,
-      years,
       updatedAt: now,
       createdAt: now,
     },
@@ -115,11 +103,9 @@ async function main() {
   console.log(
     "\n  Done. On the login page, use the \"Sign in with your ID\" form with:\n" +
       "    ID       : " + id + "\n" +
-      "    Password : (whatever you just typed)\n" +
-      "    Subjects : " + subjects.join(", ") + "\n" +
-      "    Years    : " + years.join(", ") + "\n\n" +
+      "    Password : (whatever you just typed)\n\n" +
       "  " + displayName + " lands straight on the board - no onboarding form, no college\n" +
-      "  email needed.\n"
+      "  email needed. Add subjects any time from Admin -> People -> Edit subjects.\n"
   );
   process.exit(0);
 }
