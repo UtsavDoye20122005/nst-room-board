@@ -1,0 +1,5 @@
+{
+  "_comment": "Deliberately empty. Every query in this app is a single-field query, which Firestore indexes automatically. Sorting and multi-field filtering are done in JavaScript instead, so there are no composite indexes to build and nothing to wait for after deploying.",
+  "indexes": [],
+  "fieldOverrides": []
+}

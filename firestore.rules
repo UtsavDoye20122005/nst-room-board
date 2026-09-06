@@ -1,0 +1,148 @@
+rules_version = '2';
+
+// ============================================================
+//  NST Room Board - Firestore security rules
+//
+//  Deploy with:  firebase deploy --only firestore:rules
+//  Or paste into Firebase console -> Firestore -> Rules -> Publish.
+//
+//  EDIT ONE THING: the allowedDomain() list below must match your
+//  college email domains.
+// ============================================================
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function allowedDomain() {
+      // Students have no login at all anymore - they hear about
+      // room/time changes on Slack instead of signing in here.
+      return request.auth != null
+        && request.auth.token.email != null
+        && (
+             request.auth.token.email.matches('.*@newtonschool[.]co')             // teachers
+          || request.auth.token.email.matches('.*@gmail[.]com')                   // TEMP - Utsav testing faculty/admin, remove before go-live
+          || request.auth.token.email.matches('.*@nst-room-board[.]internal')     // shared admin ID+password login (see scripts/createAdminLogin.mjs) - not a real inbox, exact made-up domain only
+        );
+    }
+
+    function signedIn() {
+      return allowedDomain();
+    }
+
+    function myProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function myRole() {
+      return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? myProfile().role
+        : 'none';
+    }
+
+    function isAdmin()   { return myRole() == 'admin'; }
+    function canBook()   { return myRole() == 'faculty' || myRole() == 'admin'; }
+
+    // ---------- users ----------
+    // Everyone signed in can read profiles (needed to show teacher names).
+    // You may only write your own profile, and you may not make yourself
+    // an admin or hand yourself faculty rights - an admin does that.
+    match /users/{uid} {
+      // You can always read yourself. Staff can read everyone, because the
+      // Admin -> People screen needs it. Students cannot read other
+      // students - a booking already carries the teacher's name, so the
+      // board never needs the users collection.
+      allow read: if signedIn() && (
+           request.auth.uid == uid
+        || myRole() == 'faculty'
+        || isAdmin()
+      );
+
+      allow create: if signedIn()
+        && request.auth.uid == uid
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.role in ['faculty', 'student'];
+
+      allow update: if signedIn() && (
+           isAdmin()
+        || ( request.auth.uid == uid
+             && request.resource.data.role == resource.data.role
+             && request.resource.data.email == resource.data.email )
+      );
+
+      allow delete: if isAdmin();
+    }
+
+    // ---------- rooms / batches / config ----------
+    // Read by anyone signed in, changed only by an admin.
+    match /rooms/{roomId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+    match /batches/{batchId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+    match /config/{docId} {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    // ---------- bookings ----------
+    // Anyone signed in can see the board.
+    // Faculty create their own bookings; only the owner or an admin
+    // may change or remove one.
+    match /bookings/{bookingId} {
+      allow read: if signedIn();
+
+      allow create: if canBook()
+        && ( request.resource.data.facultyUid == request.auth.uid || isAdmin() )
+        && request.resource.data.status == 'confirmed';
+
+      allow update, delete: if canBook()
+        && ( resource.data.facultyUid == request.auth.uid || isAdmin() );
+    }
+
+    // ---------- slotLocks ----------
+    // One document per occupied hour, id = <date>_<roomId>_<slot>.
+    // Its existence IS the booking conflict guard, so creation must be
+    // done inside a transaction by the app. Only faculty touch these.
+    match /slotLocks/{lockId} {
+      allow read: if signedIn();
+      allow create: if canBook()
+        && ( request.resource.data.facultyUid == request.auth.uid || isAdmin() );
+      allow update, delete: if canBook()
+        && ( resource.data.facultyUid == request.auth.uid || isAdmin() );
+    }
+
+    // ---------- notices ----------
+    // Append-only history. Faculty write, everyone reads, admin prunes.
+    match /notices/{noticeId} {
+      allow read: if signedIn();
+      allow create: if canBook();
+      allow update: if false;
+      allow delete: if isAdmin();
+    }
+
+    // ---------- roster ----------
+    // Pre-loaded student rows (email -> year/batch, name once it's
+    // added), read once by onboarding so a student never has to pick
+    // their own batch wrong. Everyone else can only read their OWN row -
+    // the same email-ownership check used everywhere else. Admin can
+    // additionally read every row, for the "who's in this batch" list
+    // on Admin -> Batches. Only an admin (via the seed script's Admin
+    // SDK, which bypasses this entirely) ever writes it.
+    match /roster/{email} {
+      allow read: if signedIn() && (request.auth.token.email == email || isAdmin());
+      allow write: if isAdmin();
+    }
+
+    // ---------- otpCodes ----------
+    // The one-time login codes from /api/auth/request-code. Nobody signs
+    // in yet when one of these matters, so no client rule could check who
+    // "owns" a code anyway - only the server (Admin SDK, which ignores
+    // these rules entirely) is ever allowed to touch this collection.
+    match /otpCodes/{email} {
+      allow read, write: if false;
+    }
+  }
+}
