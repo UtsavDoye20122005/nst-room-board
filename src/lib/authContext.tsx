@@ -4,17 +4,19 @@
 //  Signs people in and keeps their profile in React context.
 //
 //  Three ways in:
-//    - ID + password             (no real inbox needed - the account
-//                                  was created ahead of time by
-//                                  createAdminLogin.mjs or
-//                                  createTeacherLogin.mjs; this is the
-//                                  normal path now)
-//    - Sign in with Google       (restricted to your college email
-//                                  domains - Google already proves the
-//                                  inbox is yours, no extra step needed)
-//    - Email + verification code (same domain restriction, proves it
-//                                  the same way for anyone without
-//                                  Google sign-in - see /api/auth/*)
+//    - Sign in with Google       (the normal path for every teacher -
+//                                  personal Gmail or a college address,
+//                                  see NEXT_PUBLIC_ALLOWED_EMAIL_DOMAINS.
+//                                  Google already proves the inbox is
+//                                  yours, no extra step needed. First
+//                                  sign-in lands on /onboarding to fill
+//                                  in name, subjects and years.)
+//    - Email + verification code (same domain restriction, for anyone
+//                                  without Google sign-in on that
+//                                  address - see /api/auth/*)
+//    - ID + password             (admin only - no real inbox needed,
+//                                  the account was created ahead of
+//                                  time by createAdminLogin.mjs)
 // ============================================================
 
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";

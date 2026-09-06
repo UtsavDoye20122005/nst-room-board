@@ -4,15 +4,18 @@
 //  First-login profile, and the "Profile" page afterwards.
 //
 //  Only two kinds of sign-in reach this app now: a real teacher via
-//  their @newtonschool.co address, and the shared admin ID/password
-//  login (which never reaches this page at all - its profile is
-//  created directly by scripts/createAdminLogin.mjs, role: admin,
-//  so it always has one already). So everyone who lands here is
-//  faculty - a teacher gives their name, which years they teach, and
-//  which subject(s) they teach. Picking subjects here (instead of
-//  typing them at booking time) is what lets BookingModal offer a
-//  dropdown of just that teacher's own subjects instead of a free-text
-//  box anyone can mistype.
+//  Google/email, and the admin ID/password login (which never reaches
+//  this page at all - its profile is created directly by
+//  scripts/createAdminLogin.mjs, role: admin, so it always has one
+//  already). So everyone who lands here is faculty - a teacher gives
+//  their name and which years they teach, that's it.
+//
+//  Subjects are deliberately NOT collected here - there are too many
+//  of them and they change every semester, so keeping a subject list
+//  in sync here would just go stale. Subject is typed free-text at
+//  booking time instead (BookingModal), or an admin can optionally set
+//  someone's subjects from Admin -> People if they want the dropdown
+//  convenience for a particular person.
 //
 //  Students no longer sign in to this app at all - they hear about
 //  room/time changes on Slack instead. An admin can still promote
@@ -23,7 +26,7 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/authContext";
 import { useCampus } from "@/lib/campusContext";
-import { SUBJECT_SUGGESTIONS, YEARS, yearLabel } from "@/lib/seedData";
+import { YEARS, yearLabel } from "@/lib/seedData";
 import { useToast } from "@/components/Toast";
 import { Splash } from "@/components/Splash";
 
@@ -37,7 +40,6 @@ export default function OnboardingPage() {
 
   const [name, setName] = useState("");
   const [years, setYears] = useState<number[]>([]);
-  const [subjects, setSubjects] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
@@ -50,7 +52,6 @@ export default function OnboardingPage() {
     if (profile) {
       setName(profile.name);
       setYears(profile.years || []);
-      setSubjects(profile.subjects || []);
     } else if (user?.displayName) {
       setName(user.displayName);
     }
@@ -69,15 +70,17 @@ export default function OnboardingPage() {
     setErr(null);
     if (!name.trim()) return setErr("Please enter your full name — it's shown on every room you book.");
     if (years.length === 0) return setErr("Pick which year or years you teach.");
-    if (subjects.length === 0) return setErr("Pick at least one subject you teach.");
 
     setBusy(true);
     try {
       if (editing) {
-        await saveProfile({ name: name.trim(), subjects, years });
+        // Subjects deliberately left out of this patch - if an admin
+        // has set some for this person from Admin -> People, editing
+        // your own name/years here shouldn't wipe those out.
+        await saveProfile({ name: name.trim(), years });
         push("Profile saved");
       } else {
-        await createProfile({ name: name.trim(), role: "faculty", subjects, years });
+        await createProfile({ name: name.trim(), role: "faculty", subjects: [], years });
         push("Welcome to the board");
       }
       router.replace("/board");
@@ -157,33 +160,8 @@ export default function OnboardingPage() {
               </label>
             ))}
           </div>
-        </div>
-
-        <div>
-          <span className="label-xs">Subjects you teach</span>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {SUBJECT_SUGGESTIONS.map((s) => (
-              <label
-                key={s}
-                className={
-                  "cursor-pointer rounded-full border px-3 py-1.5 text-[12.5px] transition-colors " +
-                  (subjects.includes(s)
-                    ? "border-accent bg-accent-soft text-accent"
-                    : "border-line-strong bg-surface hover:bg-surface-2")
-                }
-              >
-                <input
-                  type="checkbox"
-                  className="sr-only"
-                  checked={subjects.includes(s)}
-                  onChange={() => setSubjects((cur) => toggle(cur, s))}
-                />
-                {s}
-              </label>
-            ))}
-          </div>
           <p className="mt-2 text-[12px] text-muted">
-            This fills the Subject dropdown automatically every time you book a room.
+            You&apos;ll type the subject each time you book a room — no need to list them here.
           </p>
         </div>
 
