@@ -14,6 +14,7 @@ export default function LoginPage() {
 
   const [staffId, setStaffId] = useState("");
   const [staffPassword, setStaffPassword] = useState("");
+  const [showStaffPassword, setShowStaffPassword] = useState(false);
   const [busyId, setBusyId] = useState(false);
 
   const [showOther, setShowOther] = useState(false);
@@ -123,20 +124,30 @@ export default function LoginPage() {
                 value={staffId}
                 onChange={(e) => setStaffId(e.target.value)}
                 autoComplete="username"
-                placeholder="e.g. ashwin"
+                placeholder="e.g. yourid"
                 required
               />
             </label>
             <label className="block">
               <span className="label-xs">Password</span>
-              <input
-                className="input mt-1"
-                type="password"
-                value={staffPassword}
-                onChange={(e) => setStaffPassword(e.target.value)}
-                autoComplete="current-password"
-                required
-              />
+              <div className="relative mt-1">
+                <input
+                  className="input pr-16"
+                  type={showStaffPassword ? "text" : "password"}
+                  value={staffPassword}
+                  onChange={(e) => setStaffPassword(e.target.value)}
+                  autoComplete="current-password"
+                  required
+                />
+                <button
+                  type="button"
+                  className="absolute inset-y-0 right-0 px-3 text-[11.5px] text-muted hover:text-accent"
+                  onClick={() => setShowStaffPassword((v) => !v)}
+                  tabIndex={-1}
+                >
+                  {showStaffPassword ? "Hide" : "Show"}
+                </button>
+              </div>
             </label>
             <button className="btn btn-primary w-full py-2" disabled={busyId} type="submit">
               {busyId ? "Signing in…" : "Sign in"}
