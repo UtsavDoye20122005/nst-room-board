@@ -14,15 +14,15 @@
 //  yet, so it's seeded with a placeholder (60) - fix that for real
 //  under Admin -> Rooms once you know it, no re-run needed.
 //
-//  What this still skips, because nobody's given an exact time for it
-//  yet:
-//   - Monday, Tuesday and Wednesday's HOLISTIC lecture (only
-//     Thursday's exact slot - 15:30-16:30, Concept Room - was ever
-//     pinned down precisely enough to book safely).
-//   - Batch 1's Wednesday afternoon Concept Room slot (subject/time
-//     not specified anywhere).
-//  Add these as their own ENTRIES rows, same shape as everything
-//  else below, once you have exact times for them.
+//  Rebuilt in full from the actual per-batch weekly sheet (both
+//  batches shown as separate rows, exact times, exact rooms) instead
+//  of the older, partly-guessed version. Two things that version got
+//  wrong, now fixed everywhere they occurred: every morning
+//  lecture/lab used to run 30 minutes too long into the 12:00-12:30
+//  slot - the sheet shows that slot free every day, lunch is the
+//  block right after it - and Batch 1's whole Wednesday afternoon,
+//  previously skipped as unknown, turned out to be three sequential
+//  Concept Room sessions (AP Lab, HOLISTIC, ADA Lab) back to back.
 //
 //  Safe to run more than once: each session's hour is a deterministic
 //  slotLock document, so a re-run just skips weeks that already exist
@@ -115,51 +115,53 @@ const M3_LAB_TEACHER = { name: "Anupam Sir", uid: "seed-teacher-m3-lab" };
 const ENTRIES = [
   // ---------------- MONDAY ----------------
   { weekday: "Mon", subject: "AP", kind: "class", title: "AP Lecture", roomId: "c6", slot: [1, 3], batchIds: BOTH },
-  { weekday: "Mon", subject: "ADA", kind: "class", title: "ADA Lecture", roomId: "c6", slot: [4, 6], batchIds: BOTH },
+  { weekday: "Mon", subject: "ADA", kind: "class", title: "ADA Lecture", roomId: "c6", slot: [4, 5], batchIds: BOTH },
   { weekday: "Mon", subject: "AI", kind: "class", title: "AI Lecture", roomId: "c6", slot: [10, 12], batchIds: BOTH },
-  { weekday: "Mon", subject: "ADA", kind: "lab", title: "ADA Lab (Batch 1)", roomId: "c6", slot: [16, 17], batchIds: [BATCH1], teacher: ADA_LAB_TEACHER },
-  { weekday: "Mon", subject: "ADA", kind: "lab", title: "ADA Lab (Batch 2)", roomId: "c6", slot: [13, 15], batchIds: [BATCH2], teacher: ADA_LAB_TEACHER },
-  // Monday's HOLISTIC lecture is on the sheet too, but without an exact
-  // time precise enough to book safely - see the header comment.
+  // Batch 1 does HOLISTIC then ADA Lab; Batch 2 does ADA Lab then AP
+  // Lab in Concept Room - different rooms, different order, same hour.
+  { weekday: "Mon", subject: "HOLISTIC", kind: "class", title: "HOLISTIC Lecture", roomId: "concept", slot: [13, 14], batchIds: [BATCH1] },
+  { weekday: "Mon", subject: "ADA", kind: "lab", title: "ADA Lab (Batch 1)", roomId: "c6", slot: [15, 17], batchIds: [BATCH1], teacher: ADA_LAB_TEACHER },
+  { weekday: "Mon", subject: "ADA", kind: "lab", title: "ADA Lab (Batch 2)", roomId: "c6", slot: [13, 14], batchIds: [BATCH2], teacher: ADA_LAB_TEACHER },
+  { weekday: "Mon", subject: "AP", kind: "lab", title: "AP Lab (Batch 2)", roomId: "concept", slot: [15, 17], batchIds: [BATCH2], teacher: AP_LAB_TEACHER },
 
   // ---------------- TUESDAY ----------------
   { weekday: "Tue", subject: "M3", kind: "class", title: "M3 Lecture", roomId: "c6", slot: [1, 3], batchIds: BOTH },
-  { weekday: "Tue", subject: "DE", kind: "class", title: "DE Lecture", roomId: "c6", slot: [4, 6], batchIds: BOTH },
+  { weekday: "Tue", subject: "DE", kind: "class", title: "DE Lecture", roomId: "c6", slot: [4, 5], batchIds: BOTH },
   { weekday: "Tue", subject: "AP", kind: "lab", title: "AP Lab (Batch 1)", roomId: "c8", slot: [12, 13], batchIds: [BATCH1], teacher: AP_LAB_TEACHER },
   { weekday: "Tue", subject: "M3", kind: "lab", title: "M3 Lab (Batch 1)", roomId: "c6", slot: [14, 15], batchIds: [BATCH1], teacher: M3_LAB_TEACHER },
+  { weekday: "Tue", subject: "HOLISTIC", kind: "class", title: "HOLISTIC Lecture", roomId: "concept", slot: [10, 11], batchIds: [BATCH2] },
   { weekday: "Tue", subject: "M3", kind: "lab", title: "M3 Lab (Batch 2)", roomId: "c4", slot: [12, 14], batchIds: [BATCH2], teacher: M3_LAB_TEACHER },
   { weekday: "Tue", subject: "DE", kind: "lab", title: "DE Lab (Batch 2)", roomId: "c8", slot: [15, 17], batchIds: [BATCH2] },
-  // Tuesday's HOLISTIC lecture is on the sheet too, same gap as Monday's.
 
   // ---------------- WEDNESDAY ----------------
   { weekday: "Wed", subject: "AP", kind: "class", title: "AP Lecture", roomId: "c6", slot: [1, 3], batchIds: BOTH },
-  { weekday: "Wed", subject: "ADA", kind: "class", title: "ADA Lecture", roomId: "c6", slot: [4, 6], batchIds: BOTH },
-  // Batch 1's whole Wednesday afternoon is Concept Room (c5) - exact
-  // subject/time still not pinned down, so still skipped.
-  // Wednesday's HOLISTIC lecture: same gap as Monday's.
+  { weekday: "Wed", subject: "ADA", kind: "class", title: "ADA Lecture", roomId: "c6", slot: [4, 5], batchIds: BOTH },
+  // Batch 1's whole afternoon is Concept Room, three sessions back to
+  // back - this used to be a total unknown, skipped entirely.
+  { weekday: "Wed", subject: "AP", kind: "lab", title: "AP Lab (Batch 1)", roomId: "concept", slot: [10, 12], batchIds: [BATCH1], teacher: AP_LAB_TEACHER },
+  { weekday: "Wed", subject: "HOLISTIC", kind: "class", title: "HOLISTIC Lecture", roomId: "concept", slot: [13, 14], batchIds: [BATCH1] },
+  { weekday: "Wed", subject: "ADA", kind: "lab", title: "ADA Lab (Batch 1)", roomId: "concept", slot: [15, 17], batchIds: [BATCH1], teacher: ADA_LAB_TEACHER },
   { weekday: "Wed", subject: "ADA", kind: "lab", title: "ADA Lab (Batch 2)", roomId: "c6", slot: [10, 12], batchIds: [BATCH2], teacher: ADA_LAB_TEACHER },
   { weekday: "Wed", subject: "AP", kind: "lab", title: "AP Lab (Batch 2)", roomId: "c6", slot: [13, 15], batchIds: [BATCH2], teacher: AP_LAB_TEACHER },
 
   // ---------------- THURSDAY ----------------
   { weekday: "Thu", subject: "M3", kind: "class", title: "M3 Lecture", roomId: "c6", slot: [1, 3], batchIds: BOTH },
-  { weekday: "Thu", subject: "DE", kind: "lab", title: "DE Lab (Batch 1)", roomId: "c6", slot: [4, 6], batchIds: [BATCH1] },
-  // Batch 2's M3 Lab, 11:00-12:30, is in Concept Room.
-  { weekday: "Thu", subject: "M3", kind: "lab", title: "M3 Lab (Batch 2)", roomId: "concept", slot: [4, 6], batchIds: [BATCH2], teacher: M3_LAB_TEACHER },
+  { weekday: "Thu", subject: "DE", kind: "lab", title: "DE Lab (Batch 1)", roomId: "c6", slot: [4, 5], batchIds: [BATCH1] },
+  { weekday: "Thu", subject: "M3", kind: "lab", title: "M3 Lab (Batch 2)", roomId: "concept", slot: [4, 5], batchIds: [BATCH2], teacher: M3_LAB_TEACHER },
   { weekday: "Thu", subject: "DE", kind: "class", title: "DE Lecture", roomId: "c6", slot: [10, 12], batchIds: BOTH },
   { weekday: "Thu", subject: "M3", kind: "lab", title: "M3 Lab (Batch 1)", roomId: "c6", slot: [13, 15], batchIds: [BATCH1], teacher: M3_LAB_TEACHER },
-  // Batch 2's HOLISTIC lecture, 15:30-16:30, is also Concept Room.
   { weekday: "Thu", subject: "HOLISTIC", kind: "class", title: "HOLISTIC Lecture", roomId: "concept", slot: [13, 14], batchIds: [BATCH2] },
 
   // ---------------- FRIDAY ----------------
-  // CONTEST uses every real classroom at once, 9:00-12:00. Booked as one
-  // session per room so the board shows all four as taken.
+  // CONTEST uses every real classroom at once (Concept Room included),
+  // 9:00-12:00. Booked as one session per room so the board shows all
+  // five as taken.
   { weekday: "Fri", subject: "CONTEST", kind: "exam", title: "CONTEST", roomId: "c1", slot: [0, 5], batchIds: BOTH, teacher: { name: "Exam Cell", uid: "seed-exam-cell" } },
   { weekday: "Fri", subject: "CONTEST", kind: "exam", title: "CONTEST", roomId: "c4", slot: [0, 5], batchIds: BOTH, teacher: { name: "Exam Cell", uid: "seed-exam-cell" } },
   { weekday: "Fri", subject: "CONTEST", kind: "exam", title: "CONTEST", roomId: "c6", slot: [0, 5], batchIds: BOTH, teacher: { name: "Exam Cell", uid: "seed-exam-cell" } },
   { weekday: "Fri", subject: "CONTEST", kind: "exam", title: "CONTEST", roomId: "c8", slot: [0, 5], batchIds: BOTH, teacher: { name: "Exam Cell", uid: "seed-exam-cell" } },
+  { weekday: "Fri", subject: "CONTEST", kind: "exam", title: "CONTEST", roomId: "concept", slot: [0, 5], batchIds: BOTH, teacher: { name: "Exam Cell", uid: "seed-exam-cell" } },
   { weekday: "Fri", subject: "AI", kind: "class", title: "AI Lecture", roomId: "c6", slot: [9, 11], batchIds: BOTH },
-  // HOLISTIC PRACTICAL, 15:00-16:30, is in Concept Room - room's now
-  // known, and the time was already documented, so this is bookable.
   { weekday: "Fri", subject: "HOLISTIC", kind: "lab", title: "HOLISTIC Practical", roomId: "concept", slot: [12, 14], batchIds: BOTH },
 ];
 
