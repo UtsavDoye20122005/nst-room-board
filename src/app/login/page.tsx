@@ -196,6 +196,9 @@ export default function LoginPage() {
                 >
                   <label className="block">
                     <span className="label-xs">6-digit code sent to {email}</span>
+                    <span className="mt-1 block text-[12px] text-muted">
+                      Not in your inbox yet? Check spam/junk — it sometimes lands there.
+                    </span>
                     <input
                       ref={codeInputRef}
                       className="input mt-1 text-center font-mono text-[20px] tracking-[.3em]"

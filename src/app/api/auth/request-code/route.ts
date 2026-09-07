@@ -94,7 +94,7 @@ export async function POST(req: Request) {
       result.provider === "console"
         ? "Email is in test mode (EMAIL_PROVIDER=console) — the code was logged on the server instead of sent. Check the terminal running npm run dev."
         : result.failed === 0
-          ? "Code sent — check your inbox."
+          ? "Code sent — check your inbox (and your spam/junk folder if it doesn't show up in a minute)."
           : "Could not send the email: " + (result.errors[0] || "unknown error"),
   });
 }
