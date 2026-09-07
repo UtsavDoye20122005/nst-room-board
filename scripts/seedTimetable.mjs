@@ -7,15 +7,22 @@
 //  student's "my classes" page show it without a teacher having
 //  to book each session by hand.
 //
-//  What this skips on purpose:
-//   - Everything held in "Concept Room" - that room has no seat
-//     count and isn't in the system yet, so it can't be checked
-//     for clashes. Add it under Admin -> Rooms once you have its
-//     capacity, then re-run this script.
-//   - HOLISTIC sessions - Dr. Soumya doesn't have a newtonschool.co
-//     address yet, so there's no one to attribute the booking to.
-//   - Friday's HOLISTIC PRACTICAL - same reason, and no room was
-//     given for it either.
+//  "Concept Room" on the timetable is its own real room now - id
+//  "concept" in campusSeed.json, also called the Pizza Room. (Not the
+//  same as C-5, despite C-5's own "Pizza Classroom" note - that's a
+//  separate, unrelated room.) Its seating capacity isn't confirmed
+//  yet, so it's seeded with a placeholder (60) - fix that for real
+//  under Admin -> Rooms once you know it, no re-run needed.
+//
+//  What this still skips, because nobody's given an exact time for it
+//  yet:
+//   - Monday, Tuesday and Wednesday's HOLISTIC lecture (only
+//     Thursday's exact slot - 15:30-16:30, Concept Room - was ever
+//     pinned down precisely enough to book safely).
+//   - Batch 1's Wednesday afternoon Concept Room slot (subject/time
+//     not specified anywhere).
+//  Add these as their own ENTRIES rows, same shape as everything
+//  else below, once you have exact times for them.
 //
 //  Safe to run more than once: each session's hour is a deterministic
 //  slotLock document, so a re-run just skips weeks that already exist
@@ -51,7 +58,12 @@ function nextWeekday(fromIso, targetDow) {
 }
 
 const DOW = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5 };
-const WEEKS = 52; // ~1 year - long enough it rarely needs re-running just to "renew" a series (an edit in Admin -> Timetable pushes it out another year automatically), short enough that a full re-seed stays well inside Firestore's free-plan daily write quota
+// ~one semester, same horizon a teacher's own "repeat weekly" checkbox
+// defaults to when booking a session by hand (see BookingModal.tsx).
+// Used to be 52 weeks/a full year - simpler to reason about at a
+// semester at a time, and re-running this script (safe - see above)
+// pushes it out another semester whenever that's actually needed.
+const WEEKS = 15;
 
 // Term starts the Monday on/after today, so we never try to book an
 // hour that's already in the past today.
@@ -67,13 +79,31 @@ const YEAR2 = [2];
 // created for them here - they still self-onboard the normal way the
 // first time they sign in. facultyUid is just a label on these seeded
 // sessions; as admin you can move or cancel any of them from the board.
+//
+// Names carry "Sir"/"Mam" directly now - that used to be added
+// automatically for display in Admin -> Timetable, but that panel (and
+// the function that added it) is gone, so nothing else does this for
+// you anymore. Baking it into the stored name is what makes it show up
+// everywhere: the board, Notices, My bookings, all of it.
+//
+// A lecture and its lab are sometimes different people - ADA Lab and
+// M3/Maths3 Lab each have their own teacher below, distinct from the
+// one who gives that subject's lecture. AP Lab is co-taught, so its
+// facultyName just carries both names.
 const TEACHERS = {
-  AP: { name: "Pranav", uid: "seed-teacher-ap" },
-  ADA: { name: "Ashwin", uid: "seed-teacher-ada" },
-  AI: { name: "Mahfooj", uid: "seed-teacher-ai" },
-  DE: { name: "Adarsh Kumar", uid: "seed-teacher-de" },
-  M3: { name: "Adhiraj", uid: "seed-teacher-m3" },
+  AP: { name: "Pranav Sir", uid: "seed-teacher-ap" },
+  ADA: { name: "Ashwin Sir", uid: "seed-teacher-ada" },
+  AI: { name: "Mahfooj Sir", uid: "seed-teacher-ai" },
+  DE: { name: "Adarsh Chauhan Sir", uid: "seed-teacher-de" },
+  M3: { name: "Adhiraj Sir", uid: "seed-teacher-m3" },
+  HOLISTIC: { name: "Soumya Mam", uid: "seed-teacher-holistic" },
 };
+
+// Lab-specific overrides - a lab entry below sets `teacher:` to one of
+// these instead of falling back to TEACHERS[entry.subject].
+const AP_LAB_TEACHER = { name: "Pranav Sir & Shubham Sir", uid: "seed-teacher-ap-lab" };
+const ADA_LAB_TEACHER = { name: "Goutam Sir", uid: "seed-teacher-ada-lab" };
+const M3_LAB_TEACHER = { name: "Anupam Sir", uid: "seed-teacher-m3-lab" };
 
 /**
  * date: ISO date of the FIRST occurrence (any week in the term works -
@@ -87,31 +117,38 @@ const ENTRIES = [
   { weekday: "Mon", subject: "AP", kind: "class", title: "AP Lecture", roomId: "c6", slot: [1, 3], batchIds: BOTH },
   { weekday: "Mon", subject: "ADA", kind: "class", title: "ADA Lecture", roomId: "c6", slot: [4, 6], batchIds: BOTH },
   { weekday: "Mon", subject: "AI", kind: "class", title: "AI Lecture", roomId: "c6", slot: [10, 12], batchIds: BOTH },
-  { weekday: "Mon", subject: "ADA", kind: "lab", title: "ADA Lab (Batch 1)", roomId: "c6", slot: [16, 17], batchIds: [BATCH1] },
-  { weekday: "Mon", subject: "ADA", kind: "lab", title: "ADA Lab (Batch 2)", roomId: "c6", slot: [13, 15], batchIds: [BATCH2] },
+  { weekday: "Mon", subject: "ADA", kind: "lab", title: "ADA Lab (Batch 1)", roomId: "c6", slot: [16, 17], batchIds: [BATCH1], teacher: ADA_LAB_TEACHER },
+  { weekday: "Mon", subject: "ADA", kind: "lab", title: "ADA Lab (Batch 2)", roomId: "c6", slot: [13, 15], batchIds: [BATCH2], teacher: ADA_LAB_TEACHER },
+  // Monday's HOLISTIC lecture is on the sheet too, but without an exact
+  // time precise enough to book safely - see the header comment.
 
   // ---------------- TUESDAY ----------------
   { weekday: "Tue", subject: "M3", kind: "class", title: "M3 Lecture", roomId: "c6", slot: [1, 3], batchIds: BOTH },
   { weekday: "Tue", subject: "DE", kind: "class", title: "DE Lecture", roomId: "c6", slot: [4, 6], batchIds: BOTH },
-  { weekday: "Tue", subject: "AP", kind: "lab", title: "AP Lab (Batch 1)", roomId: "c8", slot: [12, 13], batchIds: [BATCH1] },
-  { weekday: "Tue", subject: "M3", kind: "lab", title: "M3 Lab (Batch 1)", roomId: "c6", slot: [14, 15], batchIds: [BATCH1] },
-  { weekday: "Tue", subject: "M3", kind: "lab", title: "M3 Lab (Batch 2)", roomId: "c4", slot: [12, 14], batchIds: [BATCH2] },
+  { weekday: "Tue", subject: "AP", kind: "lab", title: "AP Lab (Batch 1)", roomId: "c8", slot: [12, 13], batchIds: [BATCH1], teacher: AP_LAB_TEACHER },
+  { weekday: "Tue", subject: "M3", kind: "lab", title: "M3 Lab (Batch 1)", roomId: "c6", slot: [14, 15], batchIds: [BATCH1], teacher: M3_LAB_TEACHER },
+  { weekday: "Tue", subject: "M3", kind: "lab", title: "M3 Lab (Batch 2)", roomId: "c4", slot: [12, 14], batchIds: [BATCH2], teacher: M3_LAB_TEACHER },
   { weekday: "Tue", subject: "DE", kind: "lab", title: "DE Lab (Batch 2)", roomId: "c8", slot: [15, 17], batchIds: [BATCH2] },
+  // Tuesday's HOLISTIC lecture is on the sheet too, same gap as Monday's.
 
   // ---------------- WEDNESDAY ----------------
   { weekday: "Wed", subject: "AP", kind: "class", title: "AP Lecture", roomId: "c6", slot: [1, 3], batchIds: BOTH },
   { weekday: "Wed", subject: "ADA", kind: "class", title: "ADA Lecture", roomId: "c6", slot: [4, 6], batchIds: BOTH },
-  // Batch 1's whole Wednesday afternoon is Concept Room - nothing bookable yet.
-  { weekday: "Wed", subject: "ADA", kind: "lab", title: "ADA Lab (Batch 2)", roomId: "c6", slot: [10, 12], batchIds: [BATCH2] },
-  { weekday: "Wed", subject: "AP", kind: "lab", title: "AP Lab (Batch 2)", roomId: "c6", slot: [13, 15], batchIds: [BATCH2] },
+  // Batch 1's whole Wednesday afternoon is Concept Room (c5) - exact
+  // subject/time still not pinned down, so still skipped.
+  // Wednesday's HOLISTIC lecture: same gap as Monday's.
+  { weekday: "Wed", subject: "ADA", kind: "lab", title: "ADA Lab (Batch 2)", roomId: "c6", slot: [10, 12], batchIds: [BATCH2], teacher: ADA_LAB_TEACHER },
+  { weekday: "Wed", subject: "AP", kind: "lab", title: "AP Lab (Batch 2)", roomId: "c6", slot: [13, 15], batchIds: [BATCH2], teacher: AP_LAB_TEACHER },
 
   // ---------------- THURSDAY ----------------
   { weekday: "Thu", subject: "M3", kind: "class", title: "M3 Lecture", roomId: "c6", slot: [1, 3], batchIds: BOTH },
   { weekday: "Thu", subject: "DE", kind: "lab", title: "DE Lab (Batch 1)", roomId: "c6", slot: [4, 6], batchIds: [BATCH1] },
-  // Batch 2's 11:00-12:30 Thursday is M3 Lab in Concept Room - skipped.
+  // Batch 2's M3 Lab, 11:00-12:30, is in Concept Room.
+  { weekday: "Thu", subject: "M3", kind: "lab", title: "M3 Lab (Batch 2)", roomId: "concept", slot: [4, 6], batchIds: [BATCH2], teacher: M3_LAB_TEACHER },
   { weekday: "Thu", subject: "DE", kind: "class", title: "DE Lecture", roomId: "c6", slot: [10, 12], batchIds: BOTH },
-  { weekday: "Thu", subject: "M3", kind: "lab", title: "M3 Lab (Batch 1)", roomId: "c6", slot: [13, 15], batchIds: [BATCH1] },
-  // Batch 2's 15:30-16:30 Thursday is HOLISTIC LEC in Concept Room - skipped.
+  { weekday: "Thu", subject: "M3", kind: "lab", title: "M3 Lab (Batch 1)", roomId: "c6", slot: [13, 15], batchIds: [BATCH1], teacher: M3_LAB_TEACHER },
+  // Batch 2's HOLISTIC lecture, 15:30-16:30, is also Concept Room.
+  { weekday: "Thu", subject: "HOLISTIC", kind: "class", title: "HOLISTIC Lecture", roomId: "concept", slot: [13, 14], batchIds: [BATCH2] },
 
   // ---------------- FRIDAY ----------------
   // CONTEST uses every real classroom at once, 9:00-12:00. Booked as one
@@ -121,7 +158,9 @@ const ENTRIES = [
   { weekday: "Fri", subject: "CONTEST", kind: "exam", title: "CONTEST", roomId: "c6", slot: [0, 5], batchIds: BOTH, teacher: { name: "Exam Cell", uid: "seed-exam-cell" } },
   { weekday: "Fri", subject: "CONTEST", kind: "exam", title: "CONTEST", roomId: "c8", slot: [0, 5], batchIds: BOTH, teacher: { name: "Exam Cell", uid: "seed-exam-cell" } },
   { weekday: "Fri", subject: "AI", kind: "class", title: "AI Lecture", roomId: "c6", slot: [9, 11], batchIds: BOTH },
-  // Friday's HOLISTIC PRACTICAL (15:00-16:30) has no room listed - skipped.
+  // HOLISTIC PRACTICAL, 15:00-16:30, is in Concept Room - room's now
+  // known, and the time was already documented, so this is bookable.
+  { weekday: "Fri", subject: "HOLISTIC", kind: "lab", title: "HOLISTIC Practical", roomId: "concept", slot: [12, 14], batchIds: BOTH },
 ];
 
 function lockId(date, roomId, slot) { return date + "_" + roomId + "_" + slot; }

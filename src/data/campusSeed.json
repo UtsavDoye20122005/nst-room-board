@@ -56,6 +56,14 @@
       "capacity": 30,
       "order": 7,
       "active": true
+    },
+    {
+      "id": "concept",
+      "name": "Concept Room",
+      "note": "Also called the Pizza Room. Capacity not confirmed yet - edit under Admin -> Rooms once known.",
+      "capacity": 60,
+      "order": 8,
+      "active": true
     }
   ],
   "batches": [
