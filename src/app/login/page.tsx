@@ -237,13 +237,13 @@ export default function LoginPage() {
               }}
             >
               <label className="block">
-                <span className="label-xs">Username</span>
+                <span className="label-xs">Username or email</span>
                 <input
                   className="input mt-1"
                   value={staffId}
                   onChange={(e) => setStaffId(e.target.value)}
                   autoComplete="username"
-                  placeholder="e.g. yourid"
+                  placeholder="e.g. yourid or you@gmail.com"
                   required
                 />
               </label>

@@ -75,6 +75,36 @@ const BATCH2 = "y2-b";
 const BOTH = [BATCH1, BATCH2];
 const YEAR2 = [2];
 
+// 1st Year, 1st Sem - added from the official SEM1 timetable. Batch A =
+// sub-batches A1+A2 combined, Batch B = B1+B2 combined - the roster only
+// tracks students at the Batch A/B level, not the four-way A1/A2/B1/B2
+// lab split, so ONLY sessions that are genuinely identical for both
+// sub-batches (same subject, room and time for A1 & A2, or for B1 & B2)
+// are included below as one combined-batch lecture. Every LAB row, every
+// YOGA/PRACTICAL row, and any row where the two sub-batches show a
+// DIFFERENT room or subject at the same hour (i.e. it only really makes
+// sense split by sub-batch) is deliberately left out for now - add those
+// once the app tracks A1/A2/B1/B2 as their own groups.
+const BATCH_Y1A = "y1-a";
+const BATCH_Y1B = "y1-b";
+const BOTH_Y1 = [BATCH_Y1A, BATCH_Y1B];
+const YEAR1 = [1];
+
+// No real teacher names given yet for 1st Year - this is a clearly-marked
+// placeholder (not a guess at a real name) so nobody mistakes it for an
+// actual assignment. It still carries a "seed-teacher-" uid, so
+// clear-timetable can find and wipe it the same as any other seeded
+// session once real names are ready to fill in.
+const TEACHER_TBD = { name: "Faculty TBD", uid: "seed-teacher-y1-tbd" };
+
+// The four lab-only sub-batches already existed in campusSeed.json with
+// nobody enrolled yet - see the big comment above the 1st Year block in
+// ENTRIES below for why sessions are still booked against them now.
+const BATCH_Y1_LAB_A1 = "y1-lab-a1";
+const BATCH_Y1_LAB_A2 = "y1-lab-a2";
+const BATCH_Y1_LAB_B1 = "y1-lab-b1";
+const BATCH_Y1_LAB_B2 = "y1-lab-b2";
+
 // Real teacher -> subject mapping you gave me. No login accounts are
 // created for them here - they still self-onboard the normal way the
 // first time they sign in. facultyUid is just a label on these seeded
@@ -155,14 +185,119 @@ const ENTRIES = [
   // ---------------- FRIDAY ----------------
   // CONTEST uses every real classroom at once (Concept Room included),
   // 9:00-12:00. Booked as one session per room so the board shows all
-  // five as taken.
-  { weekday: "Fri", subject: "CONTEST", kind: "exam", title: "CONTEST", roomId: "c1", slot: [0, 5], batchIds: BOTH, teacher: { name: "Exam Cell", uid: "seed-exam-cell" } },
-  { weekday: "Fri", subject: "CONTEST", kind: "exam", title: "CONTEST", roomId: "c4", slot: [0, 5], batchIds: BOTH, teacher: { name: "Exam Cell", uid: "seed-exam-cell" } },
-  { weekday: "Fri", subject: "CONTEST", kind: "exam", title: "CONTEST", roomId: "c6", slot: [0, 5], batchIds: BOTH, teacher: { name: "Exam Cell", uid: "seed-exam-cell" } },
-  { weekday: "Fri", subject: "CONTEST", kind: "exam", title: "CONTEST", roomId: "c8", slot: [0, 5], batchIds: BOTH, teacher: { name: "Exam Cell", uid: "seed-exam-cell" } },
-  { weekday: "Fri", subject: "CONTEST", kind: "exam", title: "CONTEST", roomId: "concept", slot: [0, 5], batchIds: BOTH, teacher: { name: "Exam Cell", uid: "seed-exam-cell" } },
+  // five as taken. 1st Year's own SEM1 sheet shows the exact same
+  // "CONTEST - Classroom 1,4,6,8,Concept Room" block at the exact same
+  // Friday morning hour - same rooms, same time - so this is one
+  // college-wide exam both years sit together, not two separate
+  // bookings. batchIds/years below cover both years on purpose.
+  { weekday: "Fri", subject: "CONTEST", kind: "exam", title: "CONTEST", roomId: "c1", slot: [0, 5], batchIds: [...BOTH, ...BOTH_Y1], years: [1, 2], teacher: { name: "Exam Cell", uid: "seed-exam-cell" } },
+  { weekday: "Fri", subject: "CONTEST", kind: "exam", title: "CONTEST", roomId: "c4", slot: [0, 5], batchIds: [...BOTH, ...BOTH_Y1], years: [1, 2], teacher: { name: "Exam Cell", uid: "seed-exam-cell" } },
+  { weekday: "Fri", subject: "CONTEST", kind: "exam", title: "CONTEST", roomId: "c6", slot: [0, 5], batchIds: [...BOTH, ...BOTH_Y1], years: [1, 2], teacher: { name: "Exam Cell", uid: "seed-exam-cell" } },
+  { weekday: "Fri", subject: "CONTEST", kind: "exam", title: "CONTEST", roomId: "c8", slot: [0, 5], batchIds: [...BOTH, ...BOTH_Y1], years: [1, 2], teacher: { name: "Exam Cell", uid: "seed-exam-cell" } },
+  { weekday: "Fri", subject: "CONTEST", kind: "exam", title: "CONTEST", roomId: "concept", slot: [0, 5], batchIds: [...BOTH, ...BOTH_Y1], years: [1, 2], teacher: { name: "Exam Cell", uid: "seed-exam-cell" } },
   { weekday: "Fri", subject: "AI", kind: "class", title: "AI Lecture", roomId: "c6", slot: [9, 11], batchIds: BOTH },
   { weekday: "Fri", subject: "HOLISTIC", kind: "lab", title: "HOLISTIC Practical", roomId: "concept", slot: [12, 14], batchIds: BOTH },
+
+  // ================================================================
+  //  1ST YEAR, 1ST SEM - the full sheet, labs included.
+  //
+  //  Lecture rows book against the parent batch (y1-a / y1-b, which
+  //  already has the real roster on it). Lab/practical rows that
+  //  split by sub-batch book against y1-lab-a1 / y1-lab-a2 /
+  //  y1-lab-b1 / y1-lab-b2 - those four batches already existed in
+  //  campusSeed.json with nobody in them yet. That's on purpose: the
+  //  session shows up correctly on the board and blocks the right
+  //  room/hour right now, and once you have the per-student A1 vs A2
+  //  (or B1 vs B2) split, dropping their emails into that batch's
+  //  extraEmails is the only thing left to do - nothing here changes.
+  //
+  //  Every entry uses TEACHER_TBD - fix the real name from Admin ->
+  //  Timetable (or here, then re-run clear-timetable + seed-timetable)
+  //  once you have it.
+  //
+  //  Two cells straight-up don't name a room on the sheet ("YOGA
+  //  PRACTICAL", Tue Batch B2 and Wed Batch A1+A2) - guessing Concept
+  //  Room for either one collides with a real, already-booked 2nd
+  //  Year concept-room session at that exact hour, which is a strong
+  //  sign that's the wrong room. Rather than write a booking that's
+  //  probably wrong (or that would just silently get skipped as
+  //  "already held"), those two are left out. Tell me the real room
+  //  and I'll add them in one line.
+  // ================================================================
+
+  // ---------------- MONDAY (1st Year) ----------------
+  { weekday: "Mon", subject: "S&AI", kind: "class", title: "S&AI Lecture", roomId: "c8", slot: [0, 2], batchIds: [BATCH_Y1A], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Mon", subject: "A.PHY", kind: "class", title: "A.PHY Lecture", roomId: "c8", slot: [3, 5], batchIds: [BATCH_Y1A], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Mon", subject: "YOGA", kind: "class", title: "Yoga Lecture (Batch A1)", roomId: "c1", slot: [9, 10], batchIds: [BATCH_Y1_LAB_A1], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Mon", subject: "YOGA", kind: "class", title: "Yoga Lecture (Batch A2)", roomId: "concept", slot: [9, 10], batchIds: [BATCH_Y1_LAB_A2], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Mon", subject: "S&AI", kind: "lab", title: "S&AI Lab (Batch A1)", roomId: "c1", slot: [12, 13], batchIds: [BATCH_Y1_LAB_A1], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Mon", subject: "A.PHY", kind: "lab", title: "A.PHY Lab (Batch A2)", roomId: "c4", slot: [12, 13], batchIds: [BATCH_Y1_LAB_A2], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Mon", subject: "A.PHY", kind: "lab", title: "A.PHY Lab (Batch A1)", roomId: "c1", slot: [15, 16], batchIds: [BATCH_Y1_LAB_A1], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Mon", subject: "S&AI", kind: "lab", title: "S&AI Lab (Batch A2)", roomId: "c4", slot: [15, 16], batchIds: [BATCH_Y1_LAB_A2], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Mon", subject: "M1", kind: "lab", title: "M1 Lab (Batch B1)", roomId: "c1", slot: [0, 2], batchIds: [BATCH_Y1_LAB_B1], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Mon", subject: "PSP", kind: "lab", title: "PSP Lab (Batch B2)", roomId: "c4", slot: [0, 2], batchIds: [BATCH_Y1_LAB_B2], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Mon", subject: "PSP", kind: "lab", title: "PSP Lab (Batch B1)", roomId: "c1", slot: [3, 5], batchIds: [BATCH_Y1_LAB_B1], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Mon", subject: "M1", kind: "lab", title: "M1 Lab (Batch B2)", roomId: "c4", slot: [3, 5], batchIds: [BATCH_Y1_LAB_B2], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Mon", subject: "A.PHY", kind: "class", title: "A.PHY Lecture", roomId: "c8", slot: [9, 11], batchIds: [BATCH_Y1B], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Mon", subject: "PSP", kind: "class", title: "PSP Lecture", roomId: "c8", slot: [12, 13], batchIds: [BATCH_Y1B], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Mon", subject: "M1", kind: "class", title: "M1 Lecture", roomId: "c8", slot: [15, 17], batchIds: [BATCH_Y1B], years: YEAR1, teacher: TEACHER_TBD },
+
+  // ---------------- TUESDAY (1st Year) ----------------
+  { weekday: "Tue", subject: "PSP", kind: "class", title: "PSP Lecture", roomId: "c8", slot: [0, 2], batchIds: [BATCH_Y1A], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Tue", subject: "M1", kind: "class", title: "M1 Lecture", roomId: "c8", slot: [3, 5], batchIds: [BATCH_Y1A], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Tue", subject: "M1", kind: "lab", title: "M1 Lab (Batch A1)", roomId: "c1", slot: [9, 10], batchIds: [BATCH_Y1_LAB_A1], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Tue", subject: "PSP", kind: "lab", title: "PSP Lab (Batch A2)", roomId: "c4", slot: [9, 10], batchIds: [BATCH_Y1_LAB_A2], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Tue", subject: "PSP", kind: "lab", title: "PSP Lab (Batch A1)", roomId: "c1", slot: [12, 13], batchIds: [BATCH_Y1_LAB_A1], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Tue", subject: "M1", kind: "lab", title: "M1 Lab (Batch A2)", roomId: "c6", slot: [12, 13], batchIds: [BATCH_Y1_LAB_A2], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Tue", subject: "A.PHY", kind: "lab", title: "A.PHY Lab (Batch B1)", roomId: "c1", slot: [0, 2], batchIds: [BATCH_Y1_LAB_B1], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Tue", subject: "S&AI", kind: "lab", title: "S&AI Lab (Batch B2)", roomId: "c4", slot: [0, 2], batchIds: [BATCH_Y1_LAB_B2], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Tue", subject: "S&AI", kind: "lab", title: "S&AI Lab (Batch B1)", roomId: "c1", slot: [3, 5], batchIds: [BATCH_Y1_LAB_B1], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Tue", subject: "A.PHY", kind: "lab", title: "A.PHY Lab (Batch B2)", roomId: "c4", slot: [3, 5], batchIds: [BATCH_Y1_LAB_B2], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Tue", subject: "S&AI", kind: "class", title: "S&AI Lecture (Batch B1)", roomId: "c8", slot: [9, 11], batchIds: [BATCH_Y1_LAB_B1], years: YEAR1, teacher: TEACHER_TBD },
+  // Batch B2, same hour, is "YOGA PRACTICAL" with no room named on the
+  // sheet - see the note above. Left out on purpose, not missed.
+
+  // ---------------- WEDNESDAY (1st Year) ----------------
+  { weekday: "Wed", subject: "A.PHY", kind: "class", title: "A.PHY Lecture", roomId: "c8", slot: [0, 2], batchIds: [BATCH_Y1A], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Wed", subject: "S&AI", kind: "class", title: "S&AI Lecture", roomId: "c8", slot: [3, 5], batchIds: [BATCH_Y1A], years: YEAR1, teacher: TEACHER_TBD },
+  // Batch A1+A2, same hour, is "YOGA PRACTICAL" with no room named on
+  // the sheet - see the note above. Left out on purpose, not missed.
+  { weekday: "Wed", subject: "A.PHY", kind: "lab", title: "A.PHY Lab (Batch A1)", roomId: "c1", slot: [12, 13], batchIds: [BATCH_Y1_LAB_A1], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Wed", subject: "S&AI", kind: "lab", title: "S&AI Lab (Batch A2)", roomId: "c4", slot: [12, 13], batchIds: [BATCH_Y1_LAB_A2], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Wed", subject: "S&AI", kind: "lab", title: "S&AI Lab (Batch A1)", roomId: "c1", slot: [15, 16], batchIds: [BATCH_Y1_LAB_A1], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Wed", subject: "A.PHY", kind: "lab", title: "A.PHY Lab (Batch A2)", roomId: "c4", slot: [15, 16], batchIds: [BATCH_Y1_LAB_A2], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Wed", subject: "M1", kind: "lab", title: "M1 Lab (Batch B1)", roomId: "c1", slot: [0, 2], batchIds: [BATCH_Y1_LAB_B1], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Wed", subject: "PSP", kind: "lab", title: "PSP Lab (Batch B2)", roomId: "c4", slot: [0, 2], batchIds: [BATCH_Y1_LAB_B2], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Wed", subject: "PSP", kind: "lab", title: "PSP Lab (Batch B1)", roomId: "c1", slot: [3, 5], batchIds: [BATCH_Y1_LAB_B1], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Wed", subject: "M1", kind: "lab", title: "M1 Lab (Batch B2)", roomId: "c4", slot: [3, 5], batchIds: [BATCH_Y1_LAB_B2], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Wed", subject: "A.PHY", kind: "class", title: "A.PHY Lecture", roomId: "c8", slot: [9, 11], batchIds: [BATCH_Y1B], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Wed", subject: "M1", kind: "class", title: "M1 Lecture", roomId: "c8", slot: [12, 13], batchIds: [BATCH_Y1B], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Wed", subject: "PSP", kind: "class", title: "PSP Lecture", roomId: "c8", slot: [15, 17], batchIds: [BATCH_Y1B], years: YEAR1, teacher: TEACHER_TBD },
+
+  // ---------------- THURSDAY (1st Year) ----------------
+  { weekday: "Thu", subject: "PSP", kind: "class", title: "PSP Lecture", roomId: "c8", slot: [0, 2], batchIds: [BATCH_Y1A], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Thu", subject: "M1", kind: "class", title: "M1 Lecture", roomId: "c8", slot: [3, 5], batchIds: [BATCH_Y1A], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Thu", subject: "PSP", kind: "lab", title: "PSP Lab (Batch A1)", roomId: "c1", slot: [9, 10], batchIds: [BATCH_Y1_LAB_A1], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Thu", subject: "M1", kind: "lab", title: "M1 Lab (Batch A2)", roomId: "c4", slot: [9, 10], batchIds: [BATCH_Y1_LAB_A2], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Thu", subject: "M1", kind: "lab", title: "M1 Lab (Batch A1)", roomId: "c1", slot: [12, 13], batchIds: [BATCH_Y1_LAB_A1], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Thu", subject: "PSP", kind: "lab", title: "PSP Lab (Batch A2)", roomId: "c4", slot: [12, 13], batchIds: [BATCH_Y1_LAB_A2], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Thu", subject: "A.PHY", kind: "lab", title: "A.PHY Lab (Batch B1)", roomId: "c1", slot: [0, 2], batchIds: [BATCH_Y1_LAB_B1], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Thu", subject: "S&AI", kind: "lab", title: "S&AI Lab (Batch B2)", roomId: "c4", slot: [0, 2], batchIds: [BATCH_Y1_LAB_B2], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Thu", subject: "S&AI", kind: "lab", title: "S&AI Lab (Batch B1)", roomId: "c1", slot: [3, 5], batchIds: [BATCH_Y1_LAB_B1], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Thu", subject: "A.PHY", kind: "lab", title: "A.PHY Lab (Batch B2)", roomId: "c4", slot: [3, 5], batchIds: [BATCH_Y1_LAB_B2], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Thu", subject: "YOGA", kind: "class", title: "Yoga Lecture (Batch B1)", roomId: "concept", slot: [9, 11], batchIds: [BATCH_Y1_LAB_B1], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Thu", subject: "YOGA", kind: "class", title: "Yoga Lecture (Batch B2)", roomId: "c8", slot: [9, 11], batchIds: [BATCH_Y1_LAB_B2], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Thu", subject: "S&AI", kind: "class", title: "S&AI Lecture", roomId: "c8", slot: [12, 14], batchIds: [BATCH_Y1B], years: YEAR1, teacher: TEACHER_TBD },
+
+  // ---------------- FRIDAY (1st Year) ----------------
+  // Same CONTEST block as 2nd Year, already covered above (batchIds
+  // there include BOTH_Y1). English is the identical room/time for
+  // both batches, so it's one shared session; LHL differs only by
+  // room (Batch A -> Classroom 6, Batch B -> Classroom 8), same hour.
+  // No sub-batch labs shown on Friday.
+  { weekday: "Fri", subject: "ENGLISH", kind: "class", title: "English", roomId: "c8", slot: [9, 11], batchIds: BOTH_Y1, years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Fri", subject: "LHL", kind: "class", title: "LHL", roomId: "c6", slot: [12, 14], batchIds: [BATCH_Y1A], years: YEAR1, teacher: TEACHER_TBD },
+  { weekday: "Fri", subject: "LHL", kind: "class", title: "LHL", roomId: "c8", slot: [12, 14], batchIds: [BATCH_Y1B], years: YEAR1, teacher: TEACHER_TBD },
 ];
 
 function lockId(date, roomId, slot) { return date + "_" + roomId + "_" + slot; }
@@ -171,6 +306,15 @@ async function writeOccurrence(entry, date, seriesId, seriesUntil) {
   const teacher = entry.teacher || TEACHERS[entry.subject];
   const room = ROOM_NAMES[entry.roomId];
   const [startSlot, endSlot] = entry.slot;
+  // Falls back to 2nd Year for every entry written before `years` existed
+  // on each entry - only the new 1st Year (and the now-combined CONTEST)
+  // entries above set it explicitly.
+  const years = entry.years || YEAR2;
+  const note = years.includes(1) && !years.includes(2)
+    ? "Seeded from the official 1st Year, 1st Sem timetable."
+    : years.includes(1) && years.includes(2)
+    ? "Seeded from the official 1st Year, 1st Sem and 2nd Year, 3rd Sem timetables."
+    : "Seeded from the official 2nd Year, 3rd Sem timetable.";
 
   return db.runTransaction(async (tx) => {
     const lockRefs = [];
@@ -197,9 +341,9 @@ async function writeOccurrence(entry, date, seriesId, seriesUntil) {
       title: entry.title,
       facultyUid: teacher.uid,
       facultyName: teacher.name,
-      years: YEAR2,
+      years,
       batchIds: entry.batchIds,
-      note: "Seeded from the official 2nd Year, 3rd Sem timetable.",
+      note,
       status: "confirmed",
       movedFrom: null,
       seriesId,

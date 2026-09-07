@@ -85,7 +85,15 @@ export function allowedDomainsLabel(): string {
 export const LOGIN_DOMAIN = "nst-room-board.internal";
 
 export function idLoginEmail(id: string): string {
-  return id.trim().toLowerCase().replace(/\s+/g, "") + "@" + LOGIN_DOMAIN;
+  const trimmed = id.trim().toLowerCase();
+  // A real address (e.g. someone signing into their own Google-linked
+  // account with a password set via `npm run set-password`) is used
+  // as-is - only a bare id like "admin" gets the made-up domain
+  // appended. Lets the same "Username & password" form serve both
+  // synthetic ID logins AND a real account that also has Google
+  // sign-in on it, without a second form.
+  if (trimmed.includes("@")) return trimmed;
+  return trimmed.replace(/\s+/g, "") + "@" + LOGIN_DOMAIN;
 }
 
 // ------------------------------------------------------------

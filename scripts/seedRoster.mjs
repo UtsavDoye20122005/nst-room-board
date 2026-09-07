@@ -30,7 +30,7 @@ const seed = JSON.parse(readFileSync(resolve(process.cwd(), "src/data/campusSeed
 
 // Load every known name file and build one email -> name lookup.
 // Add more filenames here as more year/roster data comes in.
-const nameFiles = ["src/data/roster2ndYear.json"];
+const nameFiles = ["src/data/roster2ndYear.json", "src/data/roster1stYear.json"];
 const nameByEmail = new Map();
 for (const f of nameFiles) {
   const p = resolve(process.cwd(), f);
