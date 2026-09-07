@@ -36,6 +36,7 @@ import {
   setDoc,
   updateDoc,
   where,
+  writeBatch,
   type Unsubscribe,
 } from "firebase/firestore";
 import { getDb } from "./firebase";
@@ -462,35 +463,41 @@ export async function cancelSeriesFromDate(
     .filter((b) => b.seriesId === seriesId && b.date >= fromDate && b.status === "confirmed")
     .sort((a, b) => a.date.localeCompare(b.date));
 
+  if (toCancel.length === 0) return 0;
+
+  // One atomic batch for every occurrence's status update, every
+  // freed slotLock, AND the combined notice - all in the same commit.
+  // This used to be a loop of separate transactions followed by a
+  // standalone addDoc() for the notice; if that last call ever
+  // failed (or the tab closed between the two), every session in the
+  // series would already show cancelled on the board while the
+  // Notices page never heard about it at all. A single batch can't
+  // partially succeed like that - either everything here lands, or
+  // none of it does.
+  const batch = writeBatch(db);
   for (const b of toCancel) {
-    await runTransaction(db, async (tx) => {
-      const ref = doc(db, "bookings", b.id);
-      const snap = await tx.get(ref);
-      if (!snap.exists()) return;
-      tx.update(ref, { status: "cancelled", cancelReason: reason, updatedAt: Date.now() });
-      for (let s = b.startSlot; s <= b.endSlot; s++) {
-        tx.delete(doc(db, "slotLocks", lockId(b.date, b.roomId, s)));
-      }
-    });
+    batch.update(doc(db, "bookings", b.id), { status: "cancelled", cancelReason: reason, updatedAt: Date.now() });
+    for (let s = b.startSlot; s <= b.endSlot; s++) {
+      batch.delete(doc(db, "slotLocks", lockId(b.date, b.roomId, s)));
+    }
   }
 
-  if (toCancel.length > 0) {
-    const first = toCancel[0];
-    await addDoc(collection(db, "notices"), noticeRecord({
-      kind: "cancelled",
-      bookingId: first.id,
-      text:
-        "CANCELLED (series) — " + first.subject + " (" + first.title + ") in " + roomName +
-        ", every " + weekdayName(first.date) + " from " + shortDate(fromDate) + " onward" +
-        " (" + toCancel.length + " session" + (toCancel.length === 1 ? "" : "s") + ")" +
-        (reason ? ". Reason: " + reason : ""),
-      batchIds: first.batchIds,
-      years: first.years,
-      byUid,
-      byName,
-    }));
-  }
+  const first = toCancel[0];
+  batch.set(doc(collection(db, "notices")), noticeRecord({
+    kind: "cancelled",
+    bookingId: first.id,
+    text:
+      "CANCELLED (series) — " + first.subject + " (" + first.title + ") in " + roomName +
+      ", every " + weekdayName(first.date) + " from " + shortDate(fromDate) + " onward" +
+      " (" + toCancel.length + " session" + (toCancel.length === 1 ? "" : "s") + ")" +
+      (reason ? ". Reason: " + reason : ""),
+    batchIds: first.batchIds,
+    years: first.years,
+    byUid,
+    byName,
+  }));
 
+  await batch.commit();
   return toCancel.length;
 }
 
