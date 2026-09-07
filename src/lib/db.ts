@@ -624,13 +624,42 @@ export async function moveBooking(
   });
 }
 
-/** Removes a booking and its hours entirely. */
-export async function deleteBooking(booking: Booking): Promise<void> {
+/**
+ * Removes a booking and its hours entirely - the row disappears from
+ * the board instead of staying as a struck-through "cancelled" entry.
+ *
+ * That used to mean the removal left no trace on the Notices page at
+ * all: the booking simply vanished, so nobody who wasn't staring at
+ * the board at that exact moment would ever know it happened. If the
+ * booking was still live (not already cancelled), this now posts the
+ * same "cancelled" notice `cancelBooking` would, so Notices always
+ * reflects what left the board, however it left.
+ */
+export async function deleteBooking(
+  booking: Booking,
+  roomName: string,
+  byUid: string,
+  byName: string
+): Promise<void> {
   const db = getDb();
+  const wasLive = booking.status !== "cancelled";
   await runTransaction(db, async (tx) => {
     tx.delete(doc(db, "bookings", booking.id));
     for (let s = booking.startSlot; s <= booking.endSlot; s++) {
       tx.delete(doc(db, "slotLocks", lockId(booking.date, booking.roomId, s)));
+    }
+    if (wasLive) {
+      tx.set(doc(collection(db, "notices")), noticeRecord({
+        kind: "cancelled",
+        bookingId: booking.id,
+        text:
+          "CANCELLED — " + booking.subject + " (" + booking.title + ") in " + roomName + " on " +
+          shortDate(booking.date) + " " + slotRange(booking.startSlot, booking.endSlot),
+        batchIds: booking.batchIds,
+        years: booking.years,
+        byUid,
+        byName,
+      }));
     }
   });
 }

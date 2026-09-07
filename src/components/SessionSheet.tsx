@@ -262,7 +262,7 @@ export function SessionSheet({ booking, onClose }: { booking: Booking; onClose: 
               onClick={() => {
                 if (!confirmDelete) return setConfirmDelete(true);
                 void withBusy(async () => {
-                  await deleteBooking(booking);
+                  await deleteBooking(booking, roomName(booking.roomId), profile!.uid, profile!.name);
                   push("Removed from the board");
                   onClose();
                 });
