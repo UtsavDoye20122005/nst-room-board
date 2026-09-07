@@ -64,7 +64,15 @@ export function CampusProvider({ children }: { children: React.ReactNode }) {
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [notices, setNotices] = useState<Notice[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  // One entry per subscription (rooms/batches/the schedule/notices/people).
+  // This used to be a single `error` string that only ever got SET, never
+  // cleared - so a permission error from a stale or since-fixed session
+  // (someone's faculty profile briefly missing, say) would sit on screen
+  // forever, through sign-outs and fresh sign-ins, even once the real data
+  // was completely fine again. Tracking per-source means a source clears
+  // its own banner the moment it next succeeds, and signing out clears
+  // everything, so a fresh session always starts with a clean slate.
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [loaded, setLoaded] = useState({ rooms: false, batches: false, bookings: false });
   const [bookingsWindow, setBookingsWindow] = useState(() => ({ from: todayISO(), to: todayISO() }));
 
@@ -77,33 +85,65 @@ export function CampusProvider({ children }: { children: React.ReactNode }) {
   const isStaff = profile?.role === "faculty" || profile?.role === "admin";
 
   useEffect(() => {
-    if (!active) return;
-    const onErr = (label: string) => (e: Error) => {
+    if (!active) {
+      // Signed out (or not yet signed in) - nothing should still be
+      // complaining on screen. Clear any banner left over from before.
+      setErrors({});
+      return;
+    }
+    const onOk = (key: string) =>
+      setErrors((s) => {
+        if (!(key in s)) return s;
+        const next = { ...s };
+        delete next[key];
+        return next;
+      });
+    const onErr = (key: string, label: string) => (e: Error) => {
       // A permission error here almost always means firestore.rules
       // has not been deployed, or the email domain list does not
       // include this person. Say so instead of showing a blank page.
-      setError(
-        "Could not load " + label + ": " + e.message +
-        (e.message.toLowerCase().includes("permission")
-          ? " — check that firestore.rules is deployed and that your email domain is listed in it."
-          : "")
-      );
+      setErrors((s) => ({
+        ...s,
+        [key]:
+          "Could not load " + label + ": " + e.message +
+          (e.message.toLowerCase().includes("permission")
+            ? " — check that firestore.rules is deployed and that your email domain is listed in it."
+            : ""),
+      }));
     };
 
     const unsubs = [
-      subscribeRooms((r) => { setRooms(r); setLoaded((s) => ({ ...s, rooms: true })); }, onErr("rooms")),
-      subscribeBatches((b) => { setBatches(b); setLoaded((s) => ({ ...s, batches: true })); }, onErr("batches")),
+      subscribeRooms(
+        (r) => { setRooms(r); setLoaded((s) => ({ ...s, rooms: true })); onOk("rooms"); },
+        onErr("rooms", "rooms")
+      ),
+      subscribeBatches(
+        (b) => { setBatches(b); setLoaded((s) => ({ ...s, batches: true })); onOk("batches"); },
+        onErr("batches", "batches")
+      ),
       subscribeBookingsInRange(
         bookingsWindow.from,
         bookingsWindow.to,
-        (b) => { setBookings(b); setLoaded((s) => ({ ...s, bookings: true })); },
-        onErr("the schedule")
+        (b) => { setBookings(b); setLoaded((s) => ({ ...s, bookings: true })); onOk("schedule"); },
+        onErr("schedule", "the schedule")
       ),
-      subscribeNotices(setNotices, onErr("notices")),
+      subscribeNotices(
+        (n) => { setNotices(n); onOk("notices"); },
+        onErr("notices", "notices")
+      ),
     ];
-    if (isStaff) unsubs.push(subscribeUsers(setUsers, onErr("people")));
+    if (isStaff) {
+      unsubs.push(subscribeUsers(
+        (u) => { setUsers(u); onOk("people"); },
+        onErr("people", "people")
+      ));
+    } else {
+      onOk("people");
+    }
     return () => unsubs.forEach((u) => u());
   }, [active, isStaff, bookingsWindow.from, bookingsWindow.to]);
+
+  const error = Object.values(errors)[0] ?? null;
 
   const value = useMemo<CampusState>(() => {
     const roomMap = new Map(rooms.map((r) => [r.id, r]));
