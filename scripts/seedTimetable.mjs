@@ -22,7 +22,14 @@
 //  slot - the sheet shows that slot free every day, lunch is the
 //  block right after it - and Batch 1's whole Wednesday afternoon,
 //  previously skipped as unknown, turned out to be three sequential
-//  Concept Room sessions (AP Lab, HOLISTIC, ADA Lab) back to back.
+//  sessions back to back (AP Lab, HOLISTIC, ADA Lab).
+//
+//  A later correction from the official sheet swapped which physical
+//  room Batch 1 vs Batch 2 sit in for a few of these afternoon
+//  lab/lecture hours (Monday's HOLISTIC/ADA-Lab and ADA-Lab/AP-Lab
+//  pairs, Wednesday's first AP-Lab/ADA-Lab pair) - same subject stays
+//  with the same batch, only the room the two batches swap into
+//  changed. Reflected below; nothing else on those days moved.
 //
 //  Safe to run more than once: each session's hour is a deterministic
 //  slotLock document, so a re-run just skips weeks that already exist
@@ -65,10 +72,15 @@ const DOW = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5 };
 // pushes it out another semester whenever that's actually needed.
 const WEEKS = 15;
 
-// Term starts the Monday on/after today, so we never try to book an
-// hour that's already in the past today.
+// Each entry finds ITS OWN first date independently - the next
+// occurrence of its weekday on/after today (today itself, if today
+// already is that weekday). That used to be forced through a shared
+// "next Monday" anchor instead, which meant running this on, say, a
+// Tuesday skipped the rest of that week entirely - Tuesday through
+// Friday's classes wouldn't get booked until the following Monday's
+// batch did, even though today and the remaining weekdays were still
+// perfectly valid future dates.
 const todayIso = toISO(new Date());
-const termMonday = nextWeekday(todayIso, 1);
 
 const BATCH1 = "y2-a";
 const BATCH2 = "y2-b";
@@ -149,10 +161,10 @@ const ENTRIES = [
   { weekday: "Mon", subject: "AI", kind: "class", title: "AI Lecture", roomId: "c6", slot: [10, 12], batchIds: BOTH },
   // Batch 1 does HOLISTIC then ADA Lab; Batch 2 does ADA Lab then AP
   // Lab in Concept Room - different rooms, different order, same hour.
-  { weekday: "Mon", subject: "HOLISTIC", kind: "class", title: "HOLISTIC Lecture", roomId: "concept", slot: [13, 14], batchIds: [BATCH1] },
-  { weekday: "Mon", subject: "ADA", kind: "lab", title: "ADA Lab (Batch 1)", roomId: "c6", slot: [15, 17], batchIds: [BATCH1], teacher: ADA_LAB_TEACHER },
-  { weekday: "Mon", subject: "ADA", kind: "lab", title: "ADA Lab (Batch 2)", roomId: "c6", slot: [13, 14], batchIds: [BATCH2], teacher: ADA_LAB_TEACHER },
-  { weekday: "Mon", subject: "AP", kind: "lab", title: "AP Lab (Batch 2)", roomId: "concept", slot: [15, 17], batchIds: [BATCH2], teacher: AP_LAB_TEACHER },
+  { weekday: "Mon", subject: "HOLISTIC", kind: "class", title: "HOLISTIC Lecture", roomId: "c6", slot: [13, 14], batchIds: [BATCH1] },
+  { weekday: "Mon", subject: "ADA", kind: "lab", title: "ADA Lab (Batch 1)", roomId: "concept", slot: [15, 17], batchIds: [BATCH1], teacher: ADA_LAB_TEACHER },
+  { weekday: "Mon", subject: "ADA", kind: "lab", title: "ADA Lab (Batch 2)", roomId: "concept", slot: [13, 14], batchIds: [BATCH2], teacher: ADA_LAB_TEACHER },
+  { weekday: "Mon", subject: "AP", kind: "lab", title: "AP Lab (Batch 2)", roomId: "c6", slot: [15, 17], batchIds: [BATCH2], teacher: AP_LAB_TEACHER },
 
   // ---------------- TUESDAY ----------------
   { weekday: "Tue", subject: "M3", kind: "class", title: "M3 Lecture", roomId: "c6", slot: [1, 3], batchIds: BOTH },
@@ -166,12 +178,13 @@ const ENTRIES = [
   // ---------------- WEDNESDAY ----------------
   { weekday: "Wed", subject: "AP", kind: "class", title: "AP Lecture", roomId: "c6", slot: [1, 3], batchIds: BOTH },
   { weekday: "Wed", subject: "ADA", kind: "class", title: "ADA Lecture", roomId: "c6", slot: [4, 5], batchIds: BOTH },
-  // Batch 1's whole afternoon is Concept Room, three sessions back to
-  // back - this used to be a total unknown, skipped entirely.
-  { weekday: "Wed", subject: "AP", kind: "lab", title: "AP Lab (Batch 1)", roomId: "concept", slot: [10, 12], batchIds: [BATCH1], teacher: AP_LAB_TEACHER },
+  // Batch 1's whole afternoon is three sessions back to back (AP Lab,
+  // HOLISTIC, ADA Lab) - this used to be a total unknown, skipped
+  // entirely, then corrected to swap Batch 1/2's room for this hour.
+  { weekday: "Wed", subject: "AP", kind: "lab", title: "AP Lab (Batch 1)", roomId: "c6", slot: [10, 12], batchIds: [BATCH1], teacher: AP_LAB_TEACHER },
   { weekday: "Wed", subject: "HOLISTIC", kind: "class", title: "HOLISTIC Lecture", roomId: "concept", slot: [13, 14], batchIds: [BATCH1] },
   { weekday: "Wed", subject: "ADA", kind: "lab", title: "ADA Lab (Batch 1)", roomId: "concept", slot: [15, 17], batchIds: [BATCH1], teacher: ADA_LAB_TEACHER },
-  { weekday: "Wed", subject: "ADA", kind: "lab", title: "ADA Lab (Batch 2)", roomId: "c6", slot: [10, 12], batchIds: [BATCH2], teacher: ADA_LAB_TEACHER },
+  { weekday: "Wed", subject: "ADA", kind: "lab", title: "ADA Lab (Batch 2)", roomId: "concept", slot: [10, 12], batchIds: [BATCH2], teacher: ADA_LAB_TEACHER },
   { weekday: "Wed", subject: "AP", kind: "lab", title: "AP Lab (Batch 2)", roomId: "c6", slot: [13, 15], batchIds: [BATCH2], teacher: AP_LAB_TEACHER },
 
   // ---------------- THURSDAY ----------------
@@ -215,14 +228,11 @@ const ENTRIES = [
   //  Timetable (or here, then re-run clear-timetable + seed-timetable)
   //  once you have it.
   //
-  //  Two cells straight-up don't name a room on the sheet ("YOGA
-  //  PRACTICAL", Tue Batch B2 and Wed Batch A1+A2) - guessing Concept
-  //  Room for either one collides with a real, already-booked 2nd
-  //  Year concept-room session at that exact hour, which is a strong
-  //  sign that's the wrong room. Rather than write a booking that's
-  //  probably wrong (or that would just silently get skipped as
-  //  "already held"), those two are left out. Tell me the real room
-  //  and I'll add them in one line.
+  //  Two cells ("YOGA PRACTICAL", Tue Batch B2 and Wed Batch A1+A2)
+  //  didn't name a room on the sheet - Concept Room collides with a
+  //  real, already-booked 2nd Year concept-room session at that exact
+  //  hour, so that was the wrong guess. Booked into "basement" instead
+  //  (Utsav confirmed) - see the "basement" room in campusSeed.json.
   // ================================================================
 
   // ---------------- MONDAY (1st Year) ----------------
@@ -254,14 +264,12 @@ const ENTRIES = [
   { weekday: "Tue", subject: "S&AI", kind: "lab", title: "S&AI Lab (Batch B1)", roomId: "c1", slot: [3, 5], batchIds: [BATCH_Y1_LAB_B1], years: YEAR1, teacher: TEACHER_TBD },
   { weekday: "Tue", subject: "A.PHY", kind: "lab", title: "A.PHY Lab (Batch B2)", roomId: "c4", slot: [3, 5], batchIds: [BATCH_Y1_LAB_B2], years: YEAR1, teacher: TEACHER_TBD },
   { weekday: "Tue", subject: "S&AI", kind: "class", title: "S&AI Lecture (Batch B1)", roomId: "c8", slot: [9, 11], batchIds: [BATCH_Y1_LAB_B1], years: YEAR1, teacher: TEACHER_TBD },
-  // Batch B2, same hour, is "YOGA PRACTICAL" with no room named on the
-  // sheet - see the note above. Left out on purpose, not missed.
+  { weekday: "Tue", subject: "YOGA", kind: "lab", title: "Yoga Practical (Batch B2)", roomId: "basement", slot: [9, 11], batchIds: [BATCH_Y1_LAB_B2], years: YEAR1, teacher: TEACHER_TBD },
 
   // ---------------- WEDNESDAY (1st Year) ----------------
   { weekday: "Wed", subject: "A.PHY", kind: "class", title: "A.PHY Lecture", roomId: "c8", slot: [0, 2], batchIds: [BATCH_Y1A], years: YEAR1, teacher: TEACHER_TBD },
   { weekday: "Wed", subject: "S&AI", kind: "class", title: "S&AI Lecture", roomId: "c8", slot: [3, 5], batchIds: [BATCH_Y1A], years: YEAR1, teacher: TEACHER_TBD },
-  // Batch A1+A2, same hour, is "YOGA PRACTICAL" with no room named on
-  // the sheet - see the note above. Left out on purpose, not missed.
+  { weekday: "Wed", subject: "YOGA", kind: "lab", title: "Yoga Practical", roomId: "basement", slot: [9, 11], batchIds: [BATCH_Y1A], years: YEAR1, teacher: TEACHER_TBD },
   { weekday: "Wed", subject: "A.PHY", kind: "lab", title: "A.PHY Lab (Batch A1)", roomId: "c1", slot: [12, 13], batchIds: [BATCH_Y1_LAB_A1], years: YEAR1, teacher: TEACHER_TBD },
   { weekday: "Wed", subject: "S&AI", kind: "lab", title: "S&AI Lab (Batch A2)", roomId: "c4", slot: [12, 13], batchIds: [BATCH_Y1_LAB_A2], years: YEAR1, teacher: TEACHER_TBD },
   { weekday: "Wed", subject: "S&AI", kind: "lab", title: "S&AI Lab (Batch A1)", roomId: "c1", slot: [15, 16], batchIds: [BATCH_Y1_LAB_A1], years: YEAR1, teacher: TEACHER_TBD },
@@ -371,7 +379,7 @@ let ROOM_NAMES = {};
 
 async function main() {
   console.log("\n  Seeding the real timetable into project " + process.env.FIREBASE_PROJECT_ID);
-  console.log("  Term start (next Monday): " + termMonday + "  ·  " + WEEKS + " weeks\n");
+  console.log("  Booking from today (" + todayIso + ") onward, each weekday starting at its own next occurrence  ·  " + WEEKS + " weeks\n");
 
   const roomSnap = await db.collection("rooms").get();
   if (roomSnap.empty) {
@@ -385,7 +393,7 @@ async function main() {
 
   for (const entry of ENTRIES) {
     const dow = DOW[entry.weekday];
-    const firstDate = nextWeekday(termMonday, dow);
+    const firstDate = nextWeekday(todayIso, dow);
     const dates = [];
     for (let d = firstDate; dates.length < WEEKS; d = shiftDays(d, 7)) dates.push(d);
     const untilDate = dates[dates.length - 1];

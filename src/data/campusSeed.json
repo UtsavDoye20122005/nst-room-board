@@ -64,6 +64,14 @@
       "capacity": 60,
       "order": 8,
       "active": true
+    },
+    {
+      "id": "basement",
+      "name": "Basement",
+      "note": "Capacity not confirmed yet - edit under Admin -> Rooms once known.",
+      "capacity": 60,
+      "order": 9,
+      "active": true
     }
   ],
   "batches": [
