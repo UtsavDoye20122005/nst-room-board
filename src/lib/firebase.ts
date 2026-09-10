@@ -53,11 +53,25 @@ export function allowedDomains(): string[] {
     .filter(Boolean);
 }
 
+/**
+ * The one non-newtonschool.co address allowed in: the shared admin
+ * Google account. Everyone else needs a real college address - a
+ * blanket "any gmail.com" exception used to be here, which meant
+ * literally anyone with a Gmail account could sign in. This is an
+ * exact-match exception for one address instead of a whole domain.
+ */
+export function adminGoogleEmail(): string {
+  return (process.env.NEXT_PUBLIC_ADMIN_GOOGLE_EMAIL || "").trim().toLowerCase();
+}
+
 export function isAllowedEmail(email: string | null | undefined): boolean {
   if (!email) return false;
+  const lower = email.toLowerCase();
+  const adminEmail = adminGoogleEmail();
+  if (adminEmail && lower === adminEmail) return true;
   const domains = allowedDomains();
   if (domains.length === 0) return true;
-  const at = email.toLowerCase().split("@")[1];
+  const at = lower.split("@")[1];
   return Boolean(at && domains.includes(at));
 }
 

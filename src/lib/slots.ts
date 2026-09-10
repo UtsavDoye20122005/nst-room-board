@@ -14,9 +14,11 @@ export interface Slot {
   isBreak?: boolean;
 }
 
-// Half-hour grid, 9:00 to 18:30 - matches the real timetable your college
-// gave us (classes run 9:30-11:00, labs run in odd 90-minute blocks, some
-// days go to 6:30pm). An hourly grid couldn't represent that; this can.
+// Half-hour grid, 9:00 to 22:00 - matches the real timetable your college
+// gave us (classes run 9:30-11:00, labs run in odd 90-minute blocks) and
+// extends into the evening for extra sessions, practice slots and events
+// that run after the regular day. An hourly grid couldn't represent the
+// class pattern; this can.
 export const SLOTS: Slot[] = [
   { index: 0, start: "09:00", end: "09:30" },
   { index: 1, start: "09:30", end: "10:00" },
@@ -42,6 +44,13 @@ export const SLOTS: Slot[] = [
   { index: 16, start: "17:00", end: "17:30" },
   { index: 17, start: "17:30", end: "18:00" },
   { index: 18, start: "18:00", end: "18:30" },
+  { index: 19, start: "18:30", end: "19:00" },
+  { index: 20, start: "19:00", end: "19:30" },
+  { index: 21, start: "19:30", end: "20:00" },
+  { index: 22, start: "20:00", end: "20:30" },
+  { index: 23, start: "20:30", end: "21:00" },
+  { index: 24, start: "21:00", end: "21:30" },
+  { index: 25, start: "21:30", end: "22:00" },
 ];
 
 export const FIRST_SLOT = 0;

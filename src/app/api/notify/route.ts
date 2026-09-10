@@ -13,6 +13,7 @@
 import { NextResponse } from "next/server";
 import { adminAuth, adminConfigured, adminDb } from "@/lib/firebaseAdmin";
 import { buildEmail, sendEmail } from "@/lib/email";
+import { sendSlackMessage } from "@/lib/slack";
 import { SLOTS } from "@/lib/slots";
 import type { Batch, Booking, Room, UserProfile } from "@/lib/types";
 
@@ -157,7 +158,21 @@ export async function POST(req: Request) {
     reason: reason || booking.cancelReason || "",
   });
 
-  const result = await sendEmail({ ...mail, bcc: Array.from(recipients) });
+  const [result, slack] = await Promise.all([
+    sendEmail({ ...mail, bcc: Array.from(recipients) }),
+    sendSlackMessage({
+      kind: kind as "booked" | "cancelled" | "moved" | "reinstated",
+      subject: booking.subject || "Session",
+      title: booking.title || "",
+      facultyName: booking.facultyName || caller.name,
+      roomName: room?.name || booking.roomId,
+      previousRoomName,
+      dateLabel: dateLabelForBooking(booking),
+      timeLabel: timeLabel(booking.startSlot, booking.endSlot),
+      batchLabel,
+      reason: reason || booking.cancelReason || "",
+    }),
+  ]);
 
   return NextResponse.json({
     ok: result.failed === 0,
@@ -167,6 +182,7 @@ export async function POST(req: Request) {
     failed: result.failed,
     errors: result.errors,
     batchLabel,
+    slack: !slack.attempted ? "not configured" : slack.ok ? "posted" : "failed: " + slack.error,
     message:
       result.attempted === 0
         ? "Nobody to email yet — staff appear here once they have signed in to the board at least once."

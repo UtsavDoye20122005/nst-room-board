@@ -16,16 +16,17 @@ service cloud.firestore {
     function allowedDomain() {
       // Students have no login at all anymore - they hear about
       // room/time changes on Slack instead of signing in here.
-      // Teachers sign in with whatever Google/email inbox they have -
-      // college address or personal Gmail, either is fine on purpose,
-      // so nobody's blocked just for not yet having a newtonschool.co
-      // address.
+      // Teachers sign in with their real college address only.
+      // The old rule also trusted the ENTIRE @gmail.com domain (so
+      // literally any Gmail account could sign in and self-create a
+      // faculty profile below) - that's gone. Exactly one Gmail
+      // address is trusted now: the shared admin account.
       return request.auth != null
         && request.auth.token.email != null
         && (
              request.auth.token.email.matches('.*@newtonschool[.]co')             // teachers - college address
-          || request.auth.token.email.matches('.*@gmail[.]com')                   // teachers - personal Gmail, allowed on purpose
-          || request.auth.token.email.matches('.*@nst-room-board[.]internal')     // admin ID+password login (see scripts/createAdminLogin.mjs) - not a real inbox, exact made-up domain only
+          || request.auth.token.email == 'nstroomboard@gmail.com'                 // admin - one exact address, not a whole domain
+          || request.auth.token.email.matches('.*@nst-room-board[.]internal')     // admin/teacher ID+password login (see scripts/createAdminLogin.mjs, createTeacherLogin.mjs) - not a real inbox, exact made-up domain only
         );
     }
 
