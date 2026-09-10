@@ -13,6 +13,7 @@
     "seed-roster": "node scripts/seedRoster.mjs",
     "clear-notices": "node scripts/clearNotices.mjs",
     "clear-cancelled": "node scripts/clearCancelledBookings.mjs",
+    "clear-test-bookings": "node scripts/clearBookingsBySubject.mjs",
     "clear-timetable": "node scripts/clearSeededTimetable.mjs",
     "clear-teachers": "node scripts/clearTeachers.mjs",
     "create-admin-login": "node scripts/createAdminLogin.mjs",
