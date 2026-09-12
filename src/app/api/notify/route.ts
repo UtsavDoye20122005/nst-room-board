@@ -49,6 +49,32 @@ function timeLabel(startSlot: number, endSlot: number): string {
   return a.start + " to " + b.end;
 }
 
+// India Standard Time is UTC+5:30 with no DST, so it's safe to hardcode
+// this offset rather than depend on the server's own timezone (Vercel's
+// functions run in UTC) - without this, "today"/"tomorrow" in the Slack
+// message could be wrong by a day for anything booked late at night.
+const IST_OFFSET_MS = 5.5 * 60 * 60 * 1000;
+
+function istTodayIso(): string {
+  const ist = new Date(Date.now() + IST_OFFSET_MS);
+  return ist.getUTCFullYear() + "-" + String(ist.getUTCMonth() + 1).padStart(2, "0") + "-" + String(ist.getUTCDate()).padStart(2, "0");
+}
+
+function shiftIso(iso: string, n: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d + n));
+  return dt.getUTCFullYear() + "-" + String(dt.getUTCMonth() + 1).padStart(2, "0") + "-" + String(dt.getUTCDate()).padStart(2, "0");
+}
+
+/** "today" / "tomorrow" / "yesterday" / "on <full date>" for the Slack line. */
+function dayWord(iso: string): string {
+  const t = istTodayIso();
+  if (iso === t) return "today";
+  if (iso === shiftIso(t, 1)) return "tomorrow";
+  if (iso === shiftIso(t, -1)) return "yesterday";
+  return "on " + dateLabel(iso);
+}
+
 export async function POST(req: Request) {
   if (!adminConfigured()) {
     return NextResponse.json(
@@ -62,7 +88,7 @@ export async function POST(req: Request) {
     );
   }
 
-  let body: { bookingId?: string; kind?: string; reason?: string; email?: boolean };
+  let body: { bookingId?: string; kind?: string; reason?: string; email?: boolean; slack?: boolean };
   try {
     body = await req.json();
   } catch {
@@ -70,12 +96,11 @@ export async function POST(req: Request) {
   }
 
   const { bookingId, kind, reason } = body;
-  // Slack always fires below, regardless of this - it's the "no risk" channel.
-  // Real email only goes out when the caller explicitly asks for it (the
-  // "Email the selected batches now" / "Email ... about the change" checkboxes
-  // in the app). Omitting this field defaults to true, so older clients that
-  // don't send it yet keep their existing behaviour.
+  // Each channel is an independent opt-in per action, driven by its own
+  // checkbox in the app. Omitting a field defaults it to true, so older
+  // clients that don't send these yet keep the previous behaviour.
   const wantsEmail = body.email !== false;
+  const slackRequested = body.slack !== false;
   const validKinds = ["booked", "cancelled", "moved", "reinstated"];
   if (!bookingId || !kind || !validKinds.includes(kind)) {
     return NextResponse.json({ ok: false, message: "bookingId and a valid kind are required." }, { status: 400 });
@@ -103,6 +128,10 @@ export async function POST(req: Request) {
   if (!caller || (caller.role !== "faculty" && caller.role !== "admin")) {
     return NextResponse.json({ ok: false, message: "Only faculty can send notifications." }, { status: 403 });
   }
+
+  // Slack is admin-only, even if the caller's own client asked for it -
+  // faculty can still email staff, but only an admin posts to Slack.
+  const wantsSlack = slackRequested && caller.role === "admin";
 
   // ---- what changed ----
   const bookingSnap = await db.collection("bookings").doc(bookingId).get();
@@ -168,18 +197,20 @@ export async function POST(req: Request) {
     wantsEmail
       ? sendEmail({ ...mail, bcc: Array.from(recipients) })
       : Promise.resolve({ provider: "skipped", attempted: 0, sent: 0, failed: 0, errors: [] as string[] }),
-    sendSlackMessage({
-      kind: kind as "booked" | "cancelled" | "moved" | "reinstated",
-      subject: booking.subject || "Session",
-      title: booking.title || "",
-      facultyName: booking.facultyName || caller.name,
-      roomName: room?.name || booking.roomId,
-      previousRoomName,
-      dateLabel: dateLabelForBooking(booking),
-      timeLabel: timeLabel(booking.startSlot, booking.endSlot),
-      batchLabel,
-      reason: reason || booking.cancelReason || "",
-    }),
+    wantsSlack
+      ? sendSlackMessage({
+          kind: kind as "booked" | "cancelled" | "moved" | "reinstated",
+          subject: booking.subject || "Session",
+          title: booking.title || "",
+          facultyName: booking.facultyName || caller.name,
+          roomName: room?.name || booking.roomId,
+          previousRoomName,
+          dayWord: dayWord(booking.date),
+          timeLabel: timeLabel(booking.startSlot, booking.endSlot),
+          batchLabel,
+          reason: reason || booking.cancelReason || "",
+        })
+      : Promise.resolve({ attempted: false, ok: false, error: undefined as string | undefined }),
   ]);
 
   return NextResponse.json({
@@ -190,10 +221,20 @@ export async function POST(req: Request) {
     failed: result.failed,
     errors: result.errors,
     batchLabel,
-    slack: !slack.attempted ? "not configured" : slack.ok ? "posted" : "failed: " + slack.error,
+    slack:
+      slackRequested && caller.role !== "admin"
+        ? "admin only"
+        : !wantsSlack
+          ? "skipped"
+          : !slack.attempted
+            ? "not configured"
+            : slack.ok
+              ? "posted"
+              : "failed: " + slack.error,
     message:
       !wantsEmail
-        ? "Slack notified" + (slack.attempted && !slack.ok ? " (though Slack itself failed: " + slack.error + ")" : "") + ". Email was skipped for this update."
+        ? (wantsSlack ? (slack.attempted && slack.ok ? "Posted to Slack. " : slack.attempted ? "Slack failed: " + slack.error + ". " : "") : "") +
+          "Email was skipped for this update."
         : result.attempted === 0
           ? "Nobody to email yet — staff appear here once they have signed in to the board at least once."
           : result.provider === "console"

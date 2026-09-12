@@ -6,6 +6,16 @@
 //  on; leave it unset and this quietly does nothing, same as email's
 //  EMAIL_PROVIDER=console fallback. A booking never fails because
 //  Slack is down or unset.
+//
+//  Admin-only: the caller (src/app/api/notify/route.ts) only invokes
+//  this when the signed-in person is an admin - faculty can still
+//  email staff, but cannot post to Slack. That's enforced there, not
+//  here, but is worth knowing when reading this file.
+//
+//  Messages read as a plain announcement to students, not a system
+//  log line - e.g. "M3 Lab for 1st Year Batch A will be conducted in
+//  Classroom 5 today at 10:30 to 11:00." - matching how a teacher
+//  would actually word it on the class Slack.
 // ============================================================
 
 export interface SlackMessageInput {
@@ -15,7 +25,10 @@ export interface SlackMessageInput {
   facultyName: string;
   roomName: string;
   previousRoomName?: string;
-  dateLabel: string;
+  /** "today" / "tomorrow" / "yesterday" / "on <full date>" - already
+   *  resolved by the caller so this file doesn't need to know the
+   *  server's timezone. */
+  dayWord: string;
   timeLabel: string;
   batchLabel: string;
   reason?: string;
@@ -32,25 +45,36 @@ export function slackConfigured(): boolean {
 }
 
 function line(t: SlackMessageInput): string {
-  const emoji =
-    t.kind === "cancelled" ? "\u{1F534}" : t.kind === "moved" ? "\u{1F501}" : t.kind === "reinstated" ? "\u{1F7E2}" : "\u{1F4CC}";
-
-  const what =
-    t.kind === "cancelled"
-      ? "*cancelled*"
-      : t.kind === "moved"
-        ? "*moved*" + (t.previousRoomName ? " from " + t.previousRoomName : "") + " to *" + t.roomName + "*"
-        : t.kind === "reinstated"
-          ? "*back on*, in *" + t.roomName + "*"
-          : "*booked* in *" + t.roomName + "*";
-
   const titlePart = t.title && t.title !== t.subject ? " (" + t.title + ")" : "";
+  const subject = t.subject + titlePart;
+  const forBatch = t.batchLabel ? " for " + t.batchLabel : "";
+  const atTime = t.timeLabel ? " at " + t.timeLabel : "";
 
-  return (
-    emoji + " " + t.subject + titlePart + " with " + t.facultyName + " is " + what + "\n" +
-    t.dateLabel + " · " + t.timeLabel + (t.batchLabel ? " · " + t.batchLabel : "") +
-    (t.reason ? "\n" + "Reason: " + t.reason : "")
-  );
+  let body: string;
+  switch (t.kind) {
+    case "cancelled":
+      body =
+        subject + forBatch + " cancelled for " + t.dayWord + "." +
+        (t.reason ? " Reason: " + t.reason + "." : "");
+      break;
+    case "moved":
+      body =
+        subject + forBatch + " will now be conducted in " + t.roomName +
+        (t.previousRoomName ? " instead of " + t.previousRoomName : "") +
+        ", " + t.dayWord + atTime + ".\nPlease note the room change.";
+      break;
+    case "reinstated":
+      body =
+        subject + forBatch + " is back on and will be conducted in " + t.roomName +
+        " as scheduled, " + t.dayWord + atTime + ".";
+      break;
+    default:
+      body =
+        subject + forBatch + " will be conducted in " + t.roomName +
+        " " + t.dayWord + atTime + ".\nPlease take note of this.";
+  }
+
+  return "Students,\n" + body;
 }
 
 export async function sendSlackMessage(t: SlackMessageInput): Promise<SlackResult> {

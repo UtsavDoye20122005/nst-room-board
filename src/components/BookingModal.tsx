@@ -101,7 +101,8 @@ export function BookingModal({
   const [years, setYears] = useState<number[]>(profile?.years || []);
   const [batchIds, setBatchIds] = useState<string[]>([]);
   const [note, setNote] = useState("");
-  const [sendEmail, setSendEmail] = useState(true);
+  const [sendEmail, setSendEmail] = useState(false);
+  const [sendSlack, setSendSlack] = useState(true);
   const [repeatWeekly, setRepeatWeekly] = useState(false);
   const [untilDate, setUntilDate] = useState(() => shiftDays(date, 7 * 15)); // ~one semester
   const [splitRows, setSplitRows] = useState<SplitRow[]>([]);
@@ -234,12 +235,13 @@ export function BookingModal({
         (roomFailures.length ? " — failed: " + roomFailures.join(" · ") : "")
       );
 
-      // Slack always gets told, regardless of the checkbox below - that's
-      // the risk-free channel. The checkbox only controls whether a real
-      // email also goes out.
-      for (const id of notifyIds) {
-        const res = await notifyStudents(id, "booked", undefined, sendEmail);
-        if (!res.ok) push(res.message, "bad");
+      // Each channel is its own checkbox now - only call at all if at
+      // least one of them is actually wanted for this booking.
+      if (sendEmail || sendSlack) {
+        for (const id of notifyIds) {
+          const res = await notifyStudents(id, "booked", undefined, sendEmail, sendSlack);
+          if (!res.ok) push(res.message, "bad");
+        }
       }
       onClose();
     } catch (e) {
@@ -470,6 +472,23 @@ export function BookingModal({
           />
         </label>
 
+        {profile?.role === "admin" && (
+          <label className="flex cursor-pointer items-start gap-2.5 sm:col-span-2">
+            <input
+              type="checkbox"
+              className="mt-0.5 accent-[var(--accent)]"
+              checked={sendSlack}
+              onChange={(e) => setSendSlack(e.target.checked)}
+            />
+            <span className="text-[13.5px]">
+              Post to Slack
+              <span className="mt-0.5 block text-[12px] text-muted">
+                On by default - untick to skip Slack just for this booking. Admin only, teachers don't see this.
+              </span>
+            </span>
+          </label>
+        )}
+
         <label className="flex cursor-pointer items-start gap-2.5 sm:col-span-2">
           <input
             type="checkbox"
@@ -480,7 +499,7 @@ export function BookingModal({
           <span className="text-[13.5px]">
             Also email staff about this
             <span className="mt-0.5 block text-[12px] text-muted">
-              Slack is always notified regardless of this box. Email reaches staff who have signed in at least once - never students.
+              Off by default. Email reaches staff who have signed in at least once - never students.
             </span>
           </span>
         </label>
