@@ -234,12 +234,12 @@ export function BookingModal({
         (roomFailures.length ? " — failed: " + roomFailures.join(" · ") : "")
       );
 
-      if (sendEmail) {
-        for (const id of notifyIds) {
-          const res = await notifyStudents(id, "booked");
-          if (!res.ok) push(res.message, "bad");
-        }
-        if (notifyIds.length) push("Notified students for " + notifyIds.length + " booking" + (notifyIds.length === 1 ? "" : "s") + ".", "info");
+      // Slack always gets told, regardless of the checkbox below - that's
+      // the risk-free channel. The checkbox only controls whether a real
+      // email also goes out.
+      for (const id of notifyIds) {
+        const res = await notifyStudents(id, "booked", undefined, sendEmail);
+        if (!res.ok) push(res.message, "bad");
       }
       onClose();
     } catch (e) {
@@ -478,9 +478,9 @@ export function BookingModal({
             onChange={(e) => setSendEmail(e.target.checked)}
           />
           <span className="text-[13.5px]">
-            Email the selected batches now
+            Also email staff about this
             <span className="mt-0.5 block text-[12px] text-muted">
-              Students always see it on the board either way. Email reaches those who have signed in at least once.
+              Slack is always notified regardless of this box. Email reaches staff who have signed in at least once - never students.
             </span>
           </span>
         </label>

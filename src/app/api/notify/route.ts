@@ -62,7 +62,7 @@ export async function POST(req: Request) {
     );
   }
 
-  let body: { bookingId?: string; kind?: string; reason?: string };
+  let body: { bookingId?: string; kind?: string; reason?: string; email?: boolean };
   try {
     body = await req.json();
   } catch {
@@ -70,6 +70,12 @@ export async function POST(req: Request) {
   }
 
   const { bookingId, kind, reason } = body;
+  // Slack always fires below, regardless of this - it's the "no risk" channel.
+  // Real email only goes out when the caller explicitly asks for it (the
+  // "Email the selected batches now" / "Email ... about the change" checkboxes
+  // in the app). Omitting this field defaults to true, so older clients that
+  // don't send it yet keep their existing behaviour.
+  const wantsEmail = body.email !== false;
   const validKinds = ["booked", "cancelled", "moved", "reinstated"];
   if (!bookingId || !kind || !validKinds.includes(kind)) {
     return NextResponse.json({ ok: false, message: "bookingId and a valid kind are required." }, { status: 400 });
@@ -159,7 +165,9 @@ export async function POST(req: Request) {
   });
 
   const [result, slack] = await Promise.all([
-    sendEmail({ ...mail, bcc: Array.from(recipients) }),
+    wantsEmail
+      ? sendEmail({ ...mail, bcc: Array.from(recipients) })
+      : Promise.resolve({ provider: "skipped", attempted: 0, sent: 0, failed: 0, errors: [] as string[] }),
     sendSlackMessage({
       kind: kind as "booked" | "cancelled" | "moved" | "reinstated",
       subject: booking.subject || "Session",
@@ -184,12 +192,14 @@ export async function POST(req: Request) {
     batchLabel,
     slack: !slack.attempted ? "not configured" : slack.ok ? "posted" : "failed: " + slack.error,
     message:
-      result.attempted === 0
-        ? "Nobody to email yet — staff appear here once they have signed in to the board at least once."
-        : result.provider === "console"
-          ? "Email is in test mode (EMAIL_PROVIDER=console), so nothing was actually sent. " + result.attempted + " staff member(s) would have been mailed."
-          : result.failed === 0
-            ? "Emailed " + result.sent + " staff member(s)."
-            : "Emailed " + result.sent + ", failed for " + result.failed + ".",
+      !wantsEmail
+        ? "Slack notified" + (slack.attempted && !slack.ok ? " (though Slack itself failed: " + slack.error + ")" : "") + ". Email was skipped for this update."
+        : result.attempted === 0
+          ? "Nobody to email yet — staff appear here once they have signed in to the board at least once."
+          : result.provider === "console"
+            ? "Email is in test mode (EMAIL_PROVIDER=console), so nothing was actually sent. " + result.attempted + " staff member(s) would have been mailed."
+            : result.failed === 0
+              ? "Emailed " + result.sent + " staff member(s)."
+              : "Emailed " + result.sent + ", failed for " + result.failed + ".",
   });
 }

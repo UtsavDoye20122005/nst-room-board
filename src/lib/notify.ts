@@ -22,7 +22,11 @@ export interface NotifyResult {
 export async function notifyStudents(
   bookingId: string,
   kind: "booked" | "cancelled" | "moved" | "reinstated",
-  reason?: string
+  reason?: string,
+  /** Slack always fires server-side regardless of this - it's the risk-free
+   *  channel. Set false to skip real email for this one update (the "Email
+   *  ... now" checkboxes control this) without skipping Slack too. */
+  email: boolean = true
 ): Promise<NotifyResult> {
   try {
     const user = getFirebaseAuth().currentUser;
@@ -32,7 +36,7 @@ export async function notifyStudents(
     const res = await fetch("/api/notify", {
       method: "POST",
       headers: { "content-type": "application/json", authorization: "Bearer " + token },
-      body: JSON.stringify({ bookingId, kind, reason: reason || "" }),
+      body: JSON.stringify({ bookingId, kind, reason: reason || "", email }),
     });
 
     const data = (await res.json()) as NotifyResult;

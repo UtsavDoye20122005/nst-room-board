@@ -100,10 +100,8 @@ export function SessionSheet({ booking, onClose }: { booking: Booking; onClose: 
                   const to = roomName(target);
                   await moveBooking(booking, target, from, to, profile!.uid, profile!.name);
                   push("Moved to " + to);
-                  if (sendEmail) {
-                    const res = await notifyStudents(booking.id, "moved");
-                    push(res.message, res.ok ? "info" : "bad");
-                  }
+                  const res = await notifyStudents(booking.id, "moved", undefined, sendEmail);
+                  push(res.message, res.ok ? "info" : "bad");
                   onClose();
                 })
               }
@@ -136,7 +134,10 @@ export function SessionSheet({ booking, onClose }: { booking: Booking; onClose: 
 
         <label className="mt-4 flex cursor-pointer items-start gap-2.5">
           <input type="checkbox" className="mt-0.5 accent-[var(--accent)]" checked={sendEmail} onChange={(e) => setSendEmail(e.target.checked)} />
-          <span className="text-[13.5px]">Email {batchNames(booking.batchIds)} about the change</span>
+          <span className="text-[13.5px]">
+            Also email staff about the change
+            <span className="mt-0.5 block text-[12px] text-muted">Slack is always notified regardless of this box.</span>
+          </span>
         </label>
       </Modal>
     );
@@ -165,17 +166,13 @@ export function SessionSheet({ booking, onClose }: { booking: Booking; onClose: 
                       reason.trim(), profile!.uid, profile!.name
                     );
                     push(n + " week" + (n === 1 ? "" : "s") + " cancelled, from " + shortDate(booking.date) + " onward");
-                    if (sendEmail) {
-                      const res = await notifyStudents(booking.id, "cancelled", reason.trim());
-                      push(res.message, res.ok ? "info" : "bad");
-                    }
+                    const res = await notifyStudents(booking.id, "cancelled", reason.trim(), sendEmail);
+                    push(res.message, res.ok ? "info" : "bad");
                   } else {
                     await cancelBooking(booking, roomName(booking.roomId), reason.trim(), profile!.uid, profile!.name);
                     push("This week cancelled" + (isSeries ? " — the rest of the series is untouched" : ""));
-                    if (sendEmail) {
-                      const res = await notifyStudents(booking.id, "cancelled", reason.trim());
-                      push(res.message, res.ok ? "info" : "bad");
-                    }
+                    const res = await notifyStudents(booking.id, "cancelled", reason.trim(), sendEmail);
+                    push(res.message, res.ok ? "info" : "bad");
                   }
                   onClose();
                 })
@@ -239,7 +236,10 @@ export function SessionSheet({ booking, onClose }: { booking: Booking; onClose: 
 
         <label className="mt-4 flex cursor-pointer items-start gap-2.5">
           <input type="checkbox" className="mt-0.5 accent-[var(--accent)]" checked={sendEmail} onChange={(e) => setSendEmail(e.target.checked)} />
-          <span className="text-[13.5px]">Email {batchNames(booking.batchIds)} about the cancellation</span>
+          <span className="text-[13.5px]">
+            Also email staff about the cancellation
+            <span className="mt-0.5 block text-[12px] text-muted">Slack is always notified regardless of this box.</span>
+          </span>
         </label>
       </Modal>
     );
