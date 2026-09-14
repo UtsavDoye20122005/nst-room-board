@@ -208,6 +208,7 @@ export async function POST(req: Request) {
           dayWord: dayWord(booking.date),
           timeLabel: timeLabel(booking.startSlot, booking.endSlot),
           batchLabel,
+          years,
           reason: reason || booking.cancelReason || "",
         })
       : Promise.resolve({ attempted: false, ok: false, error: undefined as string | undefined }),

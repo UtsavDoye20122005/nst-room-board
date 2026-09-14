@@ -1,11 +1,20 @@
 // ============================================================
 //  Posting booking updates to Slack, server side only.
 //
-//  Uses a Slack Incoming Webhook - a single URL from your workspace,
-//  no bot install or OAuth needed. Set SLACK_WEBHOOK_URL to turn this
-//  on; leave it unset and this quietly does nothing, same as email's
-//  EMAIL_PROVIDER=console fallback. A booking never fails because
-//  Slack is down or unset.
+//  Uses Slack Incoming Webhooks - a plain URL per channel, no bot
+//  install or OAuth needed. Two years, two channels: set
+//  SLACK_WEBHOOK_URL_YEAR1 and SLACK_WEBHOOK_URL_YEAR2 to route each
+//  booking's update to only the channel for the year(s) it's
+//  actually for - a 1st Year class never reaches the 2nd Year
+//  channel and vice versa. A booking that invites both years (e.g. a
+//  combined exam) posts to both channels.
+//
+//  SLACK_WEBHOOK_URL (no year suffix) is an optional fallback for a
+//  booking whose `years` is empty/unrecognised, or for a simpler
+//  single-channel setup if you never split by year at all. Leave any
+//  of the three unset and that channel is quietly skipped - this
+//  never breaks a booking, same as email's EMAIL_PROVIDER=console
+//  fallback.
 //
 //  Admin-only: the caller (src/app/api/notify/route.ts) only invokes
 //  this when the signed-in person is an admin - faculty can still
@@ -31,6 +40,9 @@ export interface SlackMessageInput {
   dayWord: string;
   timeLabel: string;
   batchLabel: string;
+  /** Which year(s) this booking is for - [1], [2] or [1, 2]. Decides
+   *  which Slack channel(s) the message goes to. */
+  years: number[];
   reason?: string;
 }
 
@@ -40,8 +52,30 @@ export interface SlackResult {
   error?: string;
 }
 
+/** Any channel configured at all, for the "is Slack set up?" checks. */
 export function slackConfigured(): boolean {
-  return Boolean(process.env.SLACK_WEBHOOK_URL);
+  return Boolean(
+    process.env.SLACK_WEBHOOK_URL || process.env.SLACK_WEBHOOK_URL_YEAR1 || process.env.SLACK_WEBHOOK_URL_YEAR2
+  );
+}
+
+/** Which webhook URL(s) a booking with these years should reach. */
+function webhookUrlsForYears(years: number[]): string[] {
+  const y1 = process.env.SLACK_WEBHOOK_URL_YEAR1;
+  const y2 = process.env.SLACK_WEBHOOK_URL_YEAR2;
+  const fallback = process.env.SLACK_WEBHOOK_URL;
+
+  const urls = new Set<string>();
+  if (years.includes(1) && y1) urls.add(y1);
+  if (years.includes(2) && y2) urls.add(y2);
+
+  // Nothing matched a per-year channel - either `years` was empty/
+  // unrecognised, or the matching per-year var isn't set up yet.
+  // Fall back to the single generic channel so the update still goes
+  // somewhere instead of silently vanishing.
+  if (urls.size === 0 && fallback) urls.add(fallback);
+
+  return Array.from(urls);
 }
 
 function line(t: SlackMessageInput): string {
@@ -78,21 +112,34 @@ function line(t: SlackMessageInput): string {
 }
 
 export async function sendSlackMessage(t: SlackMessageInput): Promise<SlackResult> {
-  const url = process.env.SLACK_WEBHOOK_URL;
-  if (!url) return { attempted: false, ok: false };
+  const urls = webhookUrlsForYears(t.years);
+  if (urls.length === 0) return { attempted: false, ok: false };
 
-  try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ text: line(t) }),
-    });
-    if (!res.ok) {
-      const body = await res.text();
-      return { attempted: true, ok: false, error: "Slack returned " + res.status + ": " + body.slice(0, 300) };
-    }
-    return { attempted: true, ok: true };
-  } catch (e) {
-    return { attempted: true, ok: false, error: e instanceof Error ? e.message : String(e) };
-  }
+  const text = line(t);
+
+  const outcomes = await Promise.all(
+    urls.map(async (url) => {
+      try {
+        const res = await fetch(url, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ text }),
+        });
+        if (!res.ok) {
+          const body = await res.text();
+          return { ok: false, error: "Slack returned " + res.status + ": " + body.slice(0, 300) };
+        }
+        return { ok: true, error: undefined as string | undefined };
+      } catch (e) {
+        return { ok: false, error: e instanceof Error ? e.message : String(e) };
+      }
+    })
+  );
+
+  const failures = outcomes.filter((o) => !o.ok);
+  return {
+    attempted: true,
+    ok: failures.length === 0,
+    error: failures.length ? failures.map((f) => f.error).join(" | ") : undefined,
+  };
 }
