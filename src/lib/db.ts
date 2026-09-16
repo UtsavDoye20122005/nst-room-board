@@ -212,6 +212,9 @@ export interface NewBookingInput {
   years: number[];
   batchIds: string[];
   note: string;
+  /** True only when an admin is the one booking - a teacher's booking
+   *  waits for admin sign-off. See Booking.approved. */
+  approved: boolean;
 }
 
 /**
@@ -271,6 +274,7 @@ async function writeBookingOccurrence(
       batchIds: input.batchIds,
       note: input.note,
       status: "confirmed",
+      approved: input.approved,
       movedFrom: null,
       seriesId: series.seriesId,
       seriesUntil: series.seriesUntil,
@@ -499,6 +503,42 @@ export async function cancelSeriesFromDate(
 
   await batch.commit();
   return toCancel.length;
+}
+
+/**
+ * Admin sign-off on a teacher's booking. The room was already held
+ * from the moment they booked it, so there is nothing to claim here -
+ * this only flips the flag and posts the notice, which is why it needs
+ * no transaction or conflict check.
+ *
+ * Rejecting is not a separate function on purpose: an admin rejects by
+ * cancelling the session with a reason, which already frees the hours
+ * and tells everyone why, through machinery that is well tested.
+ */
+export async function approveBooking(
+  booking: Booking,
+  roomName: string,
+  byUid: string,
+  byName: string
+): Promise<void> {
+  const db = getDb();
+
+  await updateDoc(doc(db, "bookings", booking.id), {
+    approved: true,
+    updatedAt: Date.now(),
+  });
+
+  await addDoc(collection(db, "notices"), noticeRecord({
+    kind: "booked",
+    bookingId: booking.id,
+    text:
+      "APPROVED — " + booking.subject + " (" + booking.title + ") in " + roomName + " on " +
+      shortDate(booking.date) + " " + slotRange(booking.startSlot, booking.endSlot),
+    batchIds: booking.batchIds,
+    years: booking.years,
+    byUid,
+    byName,
+  }));
 }
 
 /** Puts a cancelled session back, if its hours are still free. */

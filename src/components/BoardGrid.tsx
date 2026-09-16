@@ -194,18 +194,27 @@ function Cell({
       (highlightBatchId && !mine);
 
     const isExam = taken.kind === "exam";
+    // A teacher's booking that no admin has signed off yet. The room is
+    // genuinely held - this is only about telling everyone it isn't
+    // final, so it still renders as taken, just dashed.
+    const pending = taken.approved === false;
 
     return (
       <button
         className={
           base +
           (isExam ? " border-exam-line bg-exam-soft" : " border-busy-line bg-busy-soft") +
+          (pending ? " border-dashed" : "") +
           " hover:brightness-[.98] " +
           (dimmed ? "opacity-45 " : "") +
           (mine ? "ring-2 ring-inset ring-accent" : "")
         }
         onClick={() => onOpenSession(taken)}
-        title={"Booked by " + withHonorific(taken.facultyName)}
+        title={
+          pending
+            ? "Awaiting admin approval — booked by " + withHonorific(taken.facultyName)
+            : "Booked by " + withHonorific(taken.facultyName)
+        }
       >
         <span
           className={
@@ -215,6 +224,7 @@ function Cell({
         >
           {taken.kind}
           {taken.movedFrom ? " · moved" : ""}
+          {pending ? " · awaiting approval" : ""}
         </span>
         <span className="text-[13px] font-semibold leading-tight [overflow-wrap:anywhere]">
           {taken.subject}

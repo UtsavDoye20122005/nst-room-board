@@ -353,6 +353,9 @@ async function writeOccurrence(entry, date, seriesId, seriesUntil) {
       batchIds: entry.batchIds,
       note,
       status: "confirmed",
+      // The official timetable is the schedule itself - it is not a
+      // request waiting on anyone's approval.
+      approved: true,
       movedFrom: null,
       seriesId,
       seriesUntil,

@@ -96,15 +96,22 @@ service cloud.firestore {
     // Anyone signed in can see the board.
     // Faculty create their own bookings; only the owner or an admin
     // may change or remove one.
+    // A teacher's own booking must be created unapproved - only an
+    // admin signs it off, and only an admin may ever flip `approved`
+    // afterwards. Everything else about a booking stays editable by
+    // its owner (moving rooms, cancelling), so the rule below pins
+    // that one field rather than freezing the whole document.
     match /bookings/{bookingId} {
       allow read: if signedIn();
 
       allow create: if canBook()
         && ( request.resource.data.facultyUid == request.auth.uid || isAdmin() )
-        && request.resource.data.status == 'confirmed';
+        && request.resource.data.status == 'confirmed'
+        && ( isAdmin() || request.resource.data.approved == false );
 
       allow update, delete: if canBook()
-        && ( resource.data.facultyUid == request.auth.uid || isAdmin() );
+        && ( resource.data.facultyUid == request.auth.uid || isAdmin() )
+        && ( isAdmin() || request.resource.data.approved == resource.data.approved );
     }
 
     // ---------- slotLocks ----------

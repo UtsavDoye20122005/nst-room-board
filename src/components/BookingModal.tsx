@@ -198,6 +198,9 @@ export function BookingModal({
           years: t.years,
           batchIds: t.batchIds,
           note: note.trim(),
+          // A teacher's booking holds the room but waits for an admin
+          // to sign it off; an admin booking needs nobody's approval.
+          approved: profile.role === "admin",
         };
 
         try {

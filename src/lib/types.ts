@@ -83,6 +83,17 @@ export interface Booking {
   /** Longer note for students. */
   note: string;
   status: Status;
+  /**
+   * Admin sign-off. A teacher's own booking lands as `false` and shows
+   * on the board as awaiting approval - the room IS still held for
+   * them meanwhile, so nobody else can take the slot while an admin
+   * decides. An admin's own booking is `true` immediately.
+   *
+   * Undefined counts as approved: every booking made before this field
+   * existed (and every seeded timetable row) is already legitimate, and
+   * must not suddenly read as "pending" on the board.
+   */
+  approved?: boolean;
   cancelReason?: string;
   /** Room id this session was moved away from, if any. */
   movedFrom?: string | null;

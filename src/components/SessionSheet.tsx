@@ -12,6 +12,7 @@ import { useState } from "react";
 import { useAuth } from "@/lib/authContext";
 import { useCampus } from "@/lib/campusContext";
 import {
+  approveBooking,
   BookingConflict,
   cancelBooking,
   cancelSeriesFromDate,
@@ -49,6 +50,9 @@ export function SessionSheet({ booking, onClose }: { booking: Booking; onClose: 
   const isAdmin = profile?.role === "admin";
   const canEdit = Boolean(profile && (profile.role === "faculty" || isAdmin) && (isOwner || isAdmin));
   const cancelled = booking.status === "cancelled";
+  // Undefined means approved - everything booked before approvals
+  // existed, and every seeded timetable row, is already legitimate.
+  const awaitingApproval = booking.approved === false;
 
   // How many confirmed weeks of this series are still loaded (the board
   // only keeps ~3 weeks of history + whatever is ahead, so this counts
@@ -325,6 +329,22 @@ export function SessionSheet({ booking, onClose }: { booking: Booking; onClose: 
               <button className="btn btn-danger" onClick={() => setPane("cancel")}>Cancel session</button>
             </>
           ) : null}
+
+          {isAdmin && awaitingApproval && !cancelled ? (
+            <button
+              className="btn btn-primary"
+              disabled={busy}
+              onClick={() =>
+                void withBusy(async () => {
+                  await approveBooking(booking, roomName(booking.roomId), profile!.uid, profile!.name);
+                  push("Approved — the session is now confirmed");
+                  onClose();
+                })
+              }
+            >
+              {busy ? "Working…" : "Approve"}
+            </button>
+          ) : null}
         </>
       }
     >
@@ -334,6 +354,17 @@ export function SessionSheet({ booking, onClose }: { booking: Booking; onClose: 
         <div className="mb-4 rounded border border-off-line bg-off-soft px-3 py-2.5 text-[13px]">
           <strong className="font-semibold">This session is cancelled.</strong>
           {booking.cancelReason ? " " + booking.cancelReason : ""} The room is free for anyone to book.
+        </div>
+      ) : null}
+
+      {awaitingApproval && !cancelled ? (
+        <div className="mb-4 rounded border border-moved-line bg-moved-soft px-3 py-2.5 text-[13px]">
+          <strong className="font-semibold">Awaiting admin approval.</strong>{" "}
+          {roomName(booking.roomId)} is held for these hours so nobody else can take it, but the session
+          isn&apos;t confirmed yet.
+          {isAdmin
+            ? " Approve it below, or cancel it with a reason to turn it down."
+            : " An admin will confirm it — you'll see it on the board either way."}
         </div>
       ) : null}
 
