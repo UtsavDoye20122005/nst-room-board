@@ -67,7 +67,7 @@ function AdminBody() {
           href="https://nst-exam-seating.vercel.app/"
           target="_blank"
           rel="noopener noreferrer"
-          className="ml-auto border-b-2 border-transparent px-3.5 pb-2.5 pt-1 text-[14px] font-medium text-muted transition-colors hover:text-ink"
+          className="border-b-2 border-transparent px-3.5 pb-2.5 pt-1 text-[14px] font-medium text-muted transition-colors hover:text-ink"
         >
           Exam seating ↗
         </a>
