@@ -33,6 +33,9 @@ const config: Config = {
         exam: "var(--exam)",
         "exam-soft": "var(--exam-soft)",
         "exam-line": "var(--exam-line)",
+        pending: "var(--pending)",
+        "pending-soft": "var(--pending-soft)",
+        "pending-line": "var(--pending-line)",
       },
       fontFamily: {
         sans: ["var(--font-ui)"],

@@ -56,6 +56,13 @@
   --exam-soft: #EDE4F7;
   --exam-line: #C7AEE0;
 
+  /* booked by a teacher, still waiting on an admin's sign-off. Amber
+     on purpose: the room IS held, so it must not look free, but it
+     isn't final either, so it must not look like a settled class. */
+  --pending: #9A6B12;
+  --pending-soft: #FBF1DC;
+  --pending-line: #DFC38A;
+
   --shadow: 0 1px 2px rgba(18, 26, 25, .06), 0 8px 24px -12px rgba(18, 26, 25, .18);
 }
 
@@ -96,6 +103,10 @@
     --exam: #C9A7F0;
     --exam-soft: #2A1F3D;
     --exam-line: #4B3868;
+
+    --pending: #E8B75C;
+    --pending-soft: #33260F;
+    --pending-line: #6B5326;
 
     --shadow: 0 1px 2px rgba(0,0,0,.4), 0 10px 30px -14px rgba(0,0,0,.7);
   }

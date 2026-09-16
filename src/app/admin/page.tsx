@@ -10,8 +10,11 @@
 
 import { useState } from "react";
 import { AppShell } from "@/components/AppShell";
+import { useAuth } from "@/lib/authContext";
 import { useCampus } from "@/lib/campusContext";
 import {
+  approveBooking,
+  cancelBooking,
   deleteBatch,
   deleteRoom,
   deleteUser,
@@ -21,12 +24,16 @@ import {
   upsertBatch,
   upsertRoom,
 } from "@/lib/db";
+import { usePendingApprovals } from "@/lib/usePendingApprovals";
+import { prettyDate } from "@/lib/dates";
+import { slotRange } from "@/lib/slots";
+import { withHonorific } from "@/lib/people";
 import { YEARS, yearLabel } from "@/lib/seedData";
 import { useToast } from "@/components/Toast";
 import { Modal } from "@/components/Modal";
 import type { Batch, Role, Room, RosterEntry, UserProfile } from "@/lib/types";
 
-type Tab = "rooms" | "batches" | "people";
+type Tab = "rooms" | "batches" | "people" | "approvals";
 
 export default function AdminPage() {
   return (
@@ -38,10 +45,12 @@ export default function AdminPage() {
 
 function AdminBody() {
   const [tab, setTab] = useState<Tab>("rooms");
+  const { pending } = usePendingApprovals();
   const tabs: { id: Tab; label: string }[] = [
     { id: "rooms", label: "Rooms" },
     { id: "batches", label: "Batches" },
     { id: "people", label: "People" },
+    { id: "approvals", label: "Approvals" },
   ];
 
   return (
@@ -53,11 +62,16 @@ function AdminBody() {
             onClick={() => setTab(t.id)}
             aria-current={tab === t.id ? "page" : undefined}
             className={
-              "border-b-2 px-3.5 pb-2.5 pt-1 text-[14px] font-medium transition-colors " +
+              "flex items-center gap-1.5 border-b-2 px-3.5 pb-2.5 pt-1 text-[14px] font-medium transition-colors " +
               (tab === t.id ? "border-accent text-ink" : "border-transparent text-muted hover:text-ink")
             }
           >
             {t.label}
+            {t.id === "approvals" && pending.length > 0 ? (
+              <span className="rounded-full bg-pending px-1.5 py-px text-[11px] font-semibold leading-tight text-paper">
+                {pending.length}
+              </span>
+            ) : null}
           </button>
         ))}
 
@@ -76,6 +90,7 @@ function AdminBody() {
       {tab === "rooms" ? <RoomsPanel /> : null}
       {tab === "batches" ? <BatchesPanel /> : null}
       {tab === "people" ? <PeoplePanel /> : null}
+      {tab === "approvals" ? <ApprovalsPanel /> : null}
     </>
   );
 }
@@ -485,6 +500,109 @@ function BatchRow({
 //  weekly sessions are still created the normal way, by a teacher
 //  ticking "repeat weekly" when booking a slot on the board.)
 // ------------------------------------------------------------
+
+// ------------------------------------------------------------
+//  Approvals
+//
+//  Every teacher's booking that still needs signing off, campus-wide
+//  and in date order, so an admin can clear the lot from one screen
+//  instead of hunting for dashed boxes across the board.
+// ------------------------------------------------------------
+function ApprovalsPanel() {
+  const { pending, error } = usePendingApprovals();
+  const { roomName, batchNames } = useCampus();
+  const { profile } = useAuth();
+  const { push } = useToast();
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  async function decide(bookingId: string, approve: boolean) {
+    const booking = pending.find((b) => b.id === bookingId);
+    if (!booking || !profile) return;
+
+    setBusyId(bookingId);
+    try {
+      if (approve) {
+        await approveBooking(booking, roomName(booking.roomId), profile.uid, profile.name);
+        push("Approved — " + booking.subject + " is confirmed");
+      } else {
+        // Turning one down frees the room and posts a cancellation
+        // notice, which is exactly what a rejection means here.
+        await cancelBooking(
+          booking,
+          roomName(booking.roomId),
+          "Not approved",
+          profile.uid,
+          profile.name
+        );
+        push("Turned down — " + roomName(booking.roomId) + " is free again");
+      }
+    } catch (e) {
+      push(e instanceof Error ? e.message : "Could not save that.", "bad");
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  return (
+    <>
+      <div className="card mb-4 p-5">
+        <h2 className="text-[15px] font-semibold">Waiting for approval</h2>
+        <p className="mt-1.5 text-[13px] text-muted">
+          Rooms below are already held for these hours, so nobody can take them while you decide.
+          Approving confirms the session; turning it down frees the room straight away.
+        </p>
+      </div>
+
+      {error ? (
+        <div className="card mb-4 border-busy-line bg-busy-soft p-4 text-[13px]">{error}</div>
+      ) : null}
+
+      {pending.length === 0 ? (
+        <div className="card p-6 text-center text-[13.5px] text-muted">
+          Nothing waiting — every booking is signed off.
+        </div>
+      ) : (
+        <div className="card divide-y divide-line">
+          {pending.map((b) => (
+            <div key={b.id} className="flex flex-wrap items-center gap-3 p-4">
+              <div className="min-w-[220px] flex-1">
+                <div className="text-[14px] font-semibold [overflow-wrap:anywhere]">
+                  {b.subject}
+                  {b.title ? <span className="font-normal text-ink-2"> — {b.title}</span> : null}
+                </div>
+                <div className="mt-0.5 text-[12.5px] text-muted">
+                  {roomName(b.roomId)} · {prettyDate(b.date)} · {slotRange(b.startSlot, b.endSlot)}
+                </div>
+                <div className="mt-0.5 text-[12px] text-muted [overflow-wrap:anywhere]">
+                  {withHonorific(b.facultyName)}
+                  {b.batchIds.length ? " · " + batchNames(b.batchIds) : ""}
+                  {b.seriesId ? " · weekly series" : ""}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  className="btn btn-sm"
+                  disabled={busyId === b.id}
+                  onClick={() => void decide(b.id, false)}
+                >
+                  Turn down
+                </button>
+                <button
+                  className="btn btn-sm btn-primary"
+                  disabled={busyId === b.id}
+                  onClick={() => void decide(b.id, true)}
+                >
+                  {busyId === b.id ? "Working…" : "Approve"}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
 
 // ------------------------------------------------------------
 //  People

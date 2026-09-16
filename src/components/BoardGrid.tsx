@@ -203,8 +203,11 @@ function Cell({
       <button
         className={
           base +
-          (isExam ? " border-exam-line bg-exam-soft" : " border-busy-line bg-busy-soft") +
-          (pending ? " border-dashed" : "") +
+          (pending
+            ? " border-dashed border-pending-line bg-pending-soft"
+            : isExam
+              ? " border-exam-line bg-exam-soft"
+              : " border-busy-line bg-busy-soft") +
           " hover:brightness-[.98] " +
           (dimmed ? "opacity-45 " : "") +
           (mine ? "ring-2 ring-inset ring-accent" : "")
@@ -219,7 +222,7 @@ function Cell({
         <span
           className={
             "font-mono text-[9.5px] font-semibold uppercase tracking-[.1em] " +
-            (isExam ? "text-exam" : "text-busy")
+            (pending ? "text-pending" : isExam ? "text-exam" : "text-busy")
           }
         >
           {taken.kind}

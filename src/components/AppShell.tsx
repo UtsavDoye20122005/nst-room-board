@@ -12,9 +12,31 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/authContext";
 import { useCampus } from "@/lib/campusContext";
+import { usePendingApprovals } from "@/lib/usePendingApprovals";
 import { Splash } from "./Splash";
 
 interface NavItem { href: string; label: string; badge?: number }
+
+/**
+ * "N waiting" in the header, so an admin notices a teacher's request
+ * without having to be on the Admin page to find out. The hook only
+ * subscribes for admins, so this renders nothing at all for everyone
+ * else - no badge, no query.
+ */
+function PendingApprovalsBadge() {
+  const { pending } = usePendingApprovals();
+  if (pending.length === 0) return null;
+
+  return (
+    <Link
+      href="/admin"
+      title={pending.length + " booking(s) waiting for your approval"}
+      className="rounded-full border border-pending-line bg-pending-soft px-2.5 py-1 text-[12px] font-semibold text-pending transition-colors hover:brightness-110"
+    >
+      {pending.length} waiting
+    </Link>
+  );
+}
 
 export function AppShell({
   children,
@@ -134,6 +156,7 @@ function Frame({
             {!isStudent && profile.subjects?.length ? (
               <span className="pill">{profile.subjects.slice(0, 2).join(" · ")}</span>
             ) : null}
+            <PendingApprovalsBadge />
             <Link href="/onboarding" className="btn btn-sm">Profile</Link>
             <button className="btn btn-sm" onClick={() => void onSignOut()}>Sign out</button>
           </div>

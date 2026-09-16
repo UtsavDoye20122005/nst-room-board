@@ -140,6 +140,38 @@ export function subscribeBookingsInRange(
 }
 
 /**
+ * Every booking still waiting on an admin's sign-off, campus-wide.
+ *
+ * Deliberately NOT scoped to a date window: a teacher can book three
+ * weeks out, and that request has to reach the admin's queue whatever
+ * day the board happens to be showing. `approved == false` is a
+ * single-field equality, so this needs no composite index, and the
+ * set is naturally small - once approved, a booking drops out of it.
+ *
+ * Bookings made before approvals existed have no `approved` field at
+ * all, so they never match here. That's the intended behaviour: they
+ * are already legitimate and must not turn up as pending.
+ */
+export function subscribePendingApprovals(
+  cb: (bookings: Booking[]) => void,
+  onError?: (e: Error) => void
+): Unsubscribe {
+  return onSnapshot(
+    query(collection(getDb(), "bookings"), where("approved", "==", false)),
+    (snap) => {
+      const list = snap.docs
+        .map((d) => ({ ...(d.data() as Booking), id: d.id }))
+        // A pending booking that was cancelled in the meantime is
+        // settled - it should not sit in the queue asking to be judged.
+        .filter((b) => b.status !== "cancelled");
+      list.sort((a, b) => a.date.localeCompare(b.date) || a.startSlot - b.startSlot);
+      cb(list);
+    },
+    (e) => onError?.(e)
+  );
+}
+
+/**
  * One teacher's own bookings, past and future. Scoped by facultyUid
  * (single-field equality, no composite index needed) rather than by
  * date range, since one person's own classes are naturally a small,
