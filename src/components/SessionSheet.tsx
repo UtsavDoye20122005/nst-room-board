@@ -25,6 +25,7 @@ import { clockTime, prettyDate, shortDate, weekdayName } from "@/lib/dates";
 import { formatDuration, slotRange } from "@/lib/slots";
 import { yearLabel } from "@/lib/seedData";
 import type { Booking } from "@/lib/types";
+import { seatingLink } from "@/lib/links";
 import { Modal } from "./Modal";
 import { useToast } from "./Toast";
 
@@ -301,6 +302,18 @@ export function SessionSheet({ booking, onClose }: { booking: Booking; onClose: 
             >
               {confirmDelete ? "Click again to remove" : "Remove from board"}
             </button>
+          ) : null}
+
+          {booking.kind === "exam" ? (
+            <a
+              className="btn"
+              href={seatingLink(roomName(booking.roomId), booking.date)}
+              target="_blank"
+              rel="noopener noreferrer"
+              title="Who sits where in this room"
+            >
+              Seating chart ↗
+            </a>
           ) : null}
 
           <button className="btn" onClick={onClose} disabled={busy}>Close</button>

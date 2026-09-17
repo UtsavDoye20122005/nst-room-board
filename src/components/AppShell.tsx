@@ -103,6 +103,9 @@ function navFor(isFaculty: boolean, isAdmin: boolean): NavItem[] {
     { href: "/my", label: isFaculty ? "My bookings" : "My schedule" },
     { href: "/notices", label: "Notices" },
   ];
+  // An admin runs the draw on the Exams screen; they do not take duty themselves.
+  if (isFaculty && !isAdmin) items.push({ href: "/invigilation", label: "My invigilation" });
+  if (isAdmin) items.push({ href: "/exams", label: "Exams" });
   if (isAdmin) items.push({ href: "/admin", label: "Admin" });
   return items;
 }

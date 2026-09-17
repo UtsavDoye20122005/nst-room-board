@@ -12,3 +12,6 @@ npm-debug.log*
 *.tsbuildinfo
 next-env.d.ts
 serviceAccount.json
+
+# Scratch files this session could not delete (no delete permission)
+_to_delete/

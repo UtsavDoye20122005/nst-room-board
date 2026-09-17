@@ -75,16 +75,6 @@ function AdminBody() {
           </button>
         ))}
 
-        {/* A separate app, so this leaves the board rather than
-            switching tabs - hence a link, opened in its own tab. */}
-        <a
-          href="https://nst-exam-seating.vercel.app/"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="border-b-2 border-transparent px-3.5 pb-2.5 pt-1 text-[14px] font-medium text-muted transition-colors hover:text-ink"
-        >
-          Exam seating ↗
-        </a>
       </div>
 
       {tab === "rooms" ? <RoomsPanel /> : null}

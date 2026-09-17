@@ -34,6 +34,27 @@ service cloud.firestore {
       return allowedDomain();
     }
 
+    // A teacher marking THEMSELVES present, and only:
+    //   - on their own duty,
+    //   - as present (or clearing it) - never absent, that is the
+    //     exam office's word, not theirs,
+    //   - while the exam is starting: from the start time until
+    //     30 minutes later. Older duties have no startsAt, so those
+    //     fall back to the screen's own check.
+    function isMyAttendance() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['present', 'markedAt', 'markedBy', 'updatedAt'])
+        && resource.data.email == request.auth.token.email.lower()
+        && request.resource.data.present != false
+        && (
+             !('startsAt' in resource.data) || resource.data.startsAt == null
+             || (
+                  request.time.toMillis() >= resource.data.startsAt
+                  && request.time.toMillis() <= resource.data.startsAt + 1800000
+                )
+           );
+    }
+
     function myProfile() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
@@ -156,5 +177,72 @@ service cloud.firestore {
     match /otpCodes/{email} {
       allow read, write: if false;
     }
-  }
+  
+    // ---------- invigilation ----------
+    // Everything here is staff-only. Students cannot read a single
+    // document in these four collections.
+    //
+    // Why teachers may write and not only read: a teacher dropping a
+    // duty has to hand it to somebody else in the same moment (a new
+    // duty document) and move the two counters. Doing that from the
+    // browser keeps the app free of a server, and every one of those
+    // actions writes a line to invigLog, which only an admin can read.
+    // Nobody can quietly delete a duty: deleting is admin-only.
+
+    match /invigilators/{email} {
+      allow read: if canBook();
+      // A teacher may only move the counters (their own draw maths),
+      // never rename somebody or switch them off.
+      allow update: if isAdmin() || (
+        canBook()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['duties', 'skips', 'lastDutyDate', 'updatedAt'])
+      );
+      allow create, delete: if isAdmin();
+    }
+
+    match /examDays/{dayId} {
+      allow read: if canBook();
+      allow write: if isAdmin();
+    }
+
+    match /duties/{dutyId} {
+      allow read: if canBook();
+      // Create covers the replacement a skip hands over. The fields
+      // that say WHO and WHEN cannot be edited afterwards.
+      allow create: if canBook();
+      // Two separate doors for a teacher.
+      //
+      // 1. Attendance, on your OWN duty only. Nobody can mark a
+      //    colleague present or absent - only the exam office can.
+      //    This stays open even for a fixed pair, otherwise two
+      //    teachers who agreed to share a room could never say
+      //    "I'm here".
+      // 2. Everything else - dropping out, asking for a partner,
+      //    accepting one, and the room swap that acceptance causes.
+      //    That last one touches somebody else's duty on purpose,
+      //    so it is not limited to your own document, but a pair
+      //    both teachers agreed to is fixed: from then on only an
+      //    admin can move either of them.
+      allow update: if isAdmin()
+        || (canBook() && isMyAttendance())
+        || (
+             canBook()
+             && resource.data.partnerLocked != true
+             && request.resource.data.diff(resource.data).affectedKeys()
+                  .hasOnly(['status', 'skipReason', 'skipAt', 'partnerRequestTo', 'partnerRequestAt',
+                            'partnerLocked', 'partnerName', 'pairAgain',
+                            'swapWantEmail', 'swapWantName', 'swapOutEmail', 'swapOutName', 'swapAt',
+                            'roomId', 'roomName', 'updatedAt'])
+           );
+      allow delete: if isAdmin();
+    }
+
+    match /invigLog/{entryId} {
+      allow read: if isAdmin();
+      allow create: if canBook();
+      allow update, delete: if false;   // append only
+    }
+
+}
 }
