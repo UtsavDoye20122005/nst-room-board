@@ -14,8 +14,9 @@
 //  A teacher must be able to read "my duties" and an admin "every
 //  duty on Friday". Both are single-field equality queries here
 //  (email == me, date == friday), so neither needs a composite
-//  index, and the security rules can let a teacher read exactly
-//  their own rows and nothing else.
+//  index. Every teacher may READ every duty - the whole point of
+//  the fairness count is that it is the same number for everyone -
+//  but may only WRITE their own, which the rules enforce.
 //
 //  FAIRNESS, IN ONE LINE
 //  Pure random gives one teacher six duties and another one. So a
@@ -114,7 +115,7 @@ export function subscribeInvigilators(
     (snap) => {
       const list = snap.docs.map((d) => ({ ...(d.data() as Invigilator), email: d.id }));
       // Sorted here, not in the query, so Firestore needs no index.
-      list.sort((a, b) => a.name.localeCompare(b.name) || a.email.localeCompare(b.email));
+      list.sort((a, b) => (a.name || a.email).localeCompare(b.name || b.email) || a.email.localeCompare(b.email));
       cb(list);
     },
     (e) => onError?.(e)
@@ -134,7 +135,7 @@ export async function upsertInvigilator(input: {
   if (existing.exists()) {
     await updateDoc(ref, {
       name: input.name.trim(),
-      active: input.active ?? (existing.data() as Invigilator).active,
+      active: input.active ?? (existing.data() as Invigilator).active ?? true,
       updatedAt: now,
     });
     return;
@@ -208,7 +209,36 @@ export function subscribeExamDays(
 }
 
 export async function saveExamDay(day: ExamDay): Promise<void> {
-  await setDoc(doc(getDb(), "examDays", day.id), { ...day, updatedAt: Date.now() }, { merge: true });
+  // The document id IS the date, which is what ties the duties to it.
+  // Letting the two drift apart strands every duty already drawn, so
+  // the date of an existing day can never be edited (the form keeps it
+  // fixed); this is the belt to that pair of braces.
+  if (day.id !== day.date) {
+    throw new Error("An exam day cannot be moved to another date. Delete it and make a new one.");
+  }
+  const db = getDb();
+  await setDoc(doc(db, "examDays", day.id), { ...day, updatedAt: Date.now() }, { merge: true });
+
+  // Duties carry their own copy of the hours, because that is what the
+  // teacher's card and the attendance window read. Change the day's
+  // time and they have to follow, or the window opens at the old hour.
+  const duties = await getDutiesOn(day.date);
+  const stale = duties.filter(
+    (d) => d.startSlot !== day.startSlot || d.endSlot !== day.endSlot || !d.startsAt
+  );
+  if (!stale.length) return;
+  const startsAt = examStartMs(day.date, day.startSlot);
+  const batch = writeBatch(db);
+  const now = Date.now();
+  for (const d of stale) {
+    batch.update(doc(db, "duties", d.id), {
+      startSlot: day.startSlot,
+      endSlot: day.endSlot,
+      startsAt,
+      updatedAt: now,
+    });
+  }
+  await batch.commit();
 }
 
 /** Deletes the exam day and every duty that belongs to it. */
@@ -428,6 +458,27 @@ export function planAssignments(opts: {
  * knows this, so nobody is ever given an invigilation that clashes
  * with their own session.
  */
+/**
+ * The same clash check the draw does, but for one duty and fetched on
+ * demand - the teacher's own page has no campus data loaded.
+ */
+export async function busyEmailsFor(duty: Duty): Promise<Set<string>> {
+  try {
+    const db = getDb();
+    const [bookingSnap, userSnap] = await Promise.all([
+      getDocs(query(collection(db, "bookings"), where("date", "==", duty.date))),
+      getDocs(collection(db, "users")),
+    ]);
+    const bookings = bookingSnap.docs.map((d) => ({ ...(d.data() as Booking), id: d.id }));
+    const users = userSnap.docs.map((d) => ({ ...(d.data() as UserProfile), uid: d.id }));
+    return busyEmailsOn({ date: duty.date, startSlot: duty.startSlot, endSlot: duty.endSlot }, bookings, users);
+  } catch {
+    // Better a hand-over that might clash than no hand-over at all -
+    // the exam office sees the room either way.
+    return new Set<string>();
+  }
+}
+
 export function busyEmailsOn(
   day: { date: string; startSlot: number; endSlot: number },
   bookings: Booking[],
@@ -465,7 +516,7 @@ export async function writeAssignments(
   // same day would forget the pairs it is meant to ask about.
   const everything = await getAllDuties();
   const old = everything.filter((d) => d.date === day.date);
-  const pairedBefore = lastPartnersFrom(everything);
+  const pairedBefore = lastPartnersFrom(everything, day.date);
 
   // Clear the old round. Counts look after themselves: they are read
   // from these documents, so deleting one un-counts it.
@@ -492,6 +543,7 @@ export async function writeAssignments(
       partnerRequestAt: null,
       partnerLocked: false,
       partnerName: null,
+      partnerEmail: null,
       // A fresh draw asks the question again, so last time's "no"
       // does not carry over to this exam.
       pairAgain: null,
@@ -550,6 +602,8 @@ export async function skipDuty(opts: {
   free: boolean;
   pool: PoolMember[];
   takenEmails: string[];
+  /** Colleagues whose partner request is pointing at me right now. */
+  waitingOnMe?: Duty[];
   by: { email: string; name: string };
 }): Promise<{ replacedBy: string | null }> {
   const db = getDb();
@@ -571,15 +625,40 @@ export async function skipDuty(opts: {
     return { replacedBy: null };
   }
 
-  const replacement = pickReplacement(opts.pool, opts.takenEmails, opts.duty.email);
+  // Anybody teaching a class in those hours is no more available than
+  // they were at the original draw. The draw checks this; a drop has
+  // to check it too, or a hand-over creates the very clash the whole
+  // thing exists to avoid.
+  const busy = await busyEmailsFor(opts.duty);
+  const replacement = pickReplacement(
+    opts.pool.filter((p) => !busy.has(cleanEmail(p.email))),
+    opts.takenEmails,
+    opts.duty.email
+  );
   const batch = writeBatch(db);
   batch.update(doc(db, "duties", opts.duty.id), {
     status: "skipped",
     skipReason: opts.reason,
     skipAt: now,
     partnerRequestTo: null,
+    partnerRequestAt: null,
+    partnerLocked: false,
+    partnerName: null,
+    partnerEmail: null,
     updatedAt: now,
   });
+  // A pair is two documents: leaving releases the other half, or that
+  // colleague is left locked to somebody who is not coming.
+  releasePartnerOf(batch, opts.duty, now);
+  // And anybody still waiting on an answer from me gets their request
+  // back, rather than waiting on a teacher who has gone.
+  for (const w of opts.waitingOnMe || []) {
+    batch.update(doc(db, "duties", w.id), {
+      partnerRequestTo: null,
+      partnerRequestAt: null,
+      updatedAt: now,
+    });
+  }
   if (replacement) {
     const id = dutyId(opts.duty.date, replacement.email);
     batch.set(doc(db, "duties", id), {
@@ -599,6 +678,8 @@ export async function skipDuty(opts: {
       partnerRequestAt: null,
       partnerLocked: false,
       partnerName: null,
+      partnerEmail: null,
+      pairAgain: null,
       present: null,
       markedAt: null,
       markedBy: null,
@@ -693,9 +774,28 @@ export async function acceptPartner(opts: {
 }): Promise<void> {
   const db = getDb();
   const now = Date.now();
-  const swapWith = opts.othersInMyRoom.find(
-    (d) => d.email !== opts.me.email && d.status === "assigned" && d.email !== opts.asker.email
-  );
+  if (opts.asker.partnerLocked === true) {
+    throw new Error(opts.asker.name + " has already been fixed with somebody else.");
+  }
+  if (opts.me.partnerLocked === true) {
+    throw new Error("You are already fixed with " + (opts.me.partnerName || "a colleague") + ".");
+  }
+  // Somebody has to leave my room to make space, and it cannot be a
+  // person who is themselves half of an agreed pair - the rules will
+  // refuse that write and the whole batch would fail silently.
+  const needsSpace = opts.asker.roomId !== opts.me.roomId;
+  const swapWith = needsSpace
+    ? opts.othersInMyRoom.find(
+        (d) =>
+          d.email !== opts.me.email &&
+          d.email !== opts.asker.email &&
+          d.status === "assigned" &&
+          d.partnerLocked !== true
+      )
+    : undefined;
+  if (needsSpace && !swapWith) {
+    throw new Error("There is nobody free in " + opts.me.roomName + " to swap out. Ask the exam office.");
+  }
   const batch = writeBatch(db);
 
   // Both sides are fixed once they agree. Neither can change it
@@ -707,11 +807,16 @@ export async function acceptPartner(opts: {
     partnerRequestAt: null,
     partnerLocked: true,
     partnerName: opts.me.name,
+    partnerEmail: opts.me.email,
     updatedAt: now,
   });
   batch.update(doc(db, "duties", opts.me.id), {
+    // My own outstanding request, if I had one, is answered by this.
+    partnerRequestTo: null,
+    partnerRequestAt: null,
     partnerLocked: true,
     partnerName: opts.asker.name,
+    partnerEmail: opts.asker.email,
     updatedAt: now,
   });
   if (swapWith) {
@@ -770,16 +875,32 @@ export async function getAllDuties(): Promise<Duty[]> {
  * being redrawn counts too: that is the common case, the admin
  * redrawing the same exam.
  */
-export function lastPartnersFrom(duties: Duty[]): Map<string, PastPartner> {
-  const byDate = [...duties].sort((a, b) => b.date.localeCompare(a.date));
+export function lastPartnersFrom(duties: Duty[], onOrBefore?: string): Map<string, PastPartner> {
+  const byDate = [...duties]
+    .filter((d) => !onOrBefore || d.date <= onOrBefore)
+    .sort((a, b) => b.date.localeCompare(a.date));
   const out = new Map<string, PastPartner>();
   for (const d of byDate) {
     if (d.partnerLocked !== true) continue;
     const me = cleanEmail(d.email);
     if (out.has(me)) continue; // the newest one wins
-    const other = byDate.find(
+    // The pair recorded the colleague's address when it was agreed, so
+    // there is no guessing who it was - guessing goes wrong the moment
+    // a room holds three people.
+    if (d.partnerEmail) {
+      out.set(me, {
+        email: cleanEmail(d.partnerEmail),
+        name: d.partnerName || d.partnerEmail,
+        date: d.date,
+      });
+      continue;
+    }
+    // Pairs agreed before the address was recorded: fall back to the
+    // name, and only when the room holds exactly two people.
+    const roomMates = byDate.filter(
       (x) => x.date === d.date && x.roomId === d.roomId && cleanEmail(x.email) !== me && x.status !== "skipped"
     );
+    const other = roomMates.length === 1 ? roomMates[0] : roomMates.find((x) => x.name === d.partnerName);
     if (other) out.set(me, { email: cleanEmail(other.email), name: other.name, date: d.date });
   }
   return out;
@@ -835,9 +956,13 @@ export async function cancelSwapIn(duty: Duty): Promise<void> {
 }
 
 /**
- * The exam office answering a swap request. Approving takes the named
- * colleague off the duty and puts the requested teacher in their
- * place, in one write, so the room is never left short in between.
+ * The exam office answering a swap request.
+ *
+ * The day is read again first, because a request can be hours old: the
+ * teacher asked for may have been given a duty since, and the
+ * colleague named may already have gone. And the colleague going out
+ * is marked as dropped rather than deleted - their attendance and the
+ * fact they were once on this exam are part of the record.
  */
 export async function decideSwapIn(opts: {
   duty: Duty;
@@ -867,10 +992,42 @@ export async function decideSwapIn(opts: {
     return;
   }
 
+  const onTheDay = await getDutiesOn(duty.date);
+  const incoming = onTheDay.find((d) => d.email === duty.swapWantEmail && d.status !== "skipped");
+  const outgoing = onTheDay.find((d) => d.email === duty.swapOutEmail && d.status !== "skipped");
+
+  if (!outgoing) {
+    await updateDoc(doc(db, "duties", duty.id), clear);
+    throw new Error((duty.swapOutName || "That teacher") + " is no longer on this exam, so there is nothing to swap.");
+  }
+  if (incoming) {
+    await updateDoc(doc(db, "duties", duty.id), clear);
+    throw new Error(
+      (duty.swapWantName || "That teacher") + " has since been given " + incoming.roomName + " on this day."
+    );
+  }
+  if (outgoing.partnerLocked === true && cleanEmail(outgoing.partnerEmail || "") !== cleanEmail(duty.email)) {
+    throw new Error(
+      outgoing.name + " is fixed with " + (outgoing.partnerName || "a colleague") + ". Undo that pair first."
+    );
+  }
+
   const inId = dutyId(duty.date, duty.swapWantEmail);
-  const outId = dutyId(duty.date, duty.swapOutEmail);
   const batch = writeBatch(db);
-  batch.delete(doc(db, "duties", outId));
+
+  batch.update(doc(db, "duties", outgoing.id), {
+    status: "skipped",
+    skipReason: "Swapped out at " + duty.name + "'s request",
+    skipAt: now,
+    partnerRequestTo: null,
+    partnerRequestAt: null,
+    partnerLocked: false,
+    partnerName: null,
+    partnerEmail: null,
+    updatedAt: now,
+  });
+  releasePartnerOf(batch, outgoing, now);
+
   batch.set(doc(db, "duties", inId), {
     id: inId,
     date: duty.date,
@@ -888,6 +1045,7 @@ export async function decideSwapIn(opts: {
     partnerRequestAt: null,
     partnerLocked: false,
     partnerName: null,
+    partnerEmail: null,
     pairAgain: null,
     lastPartnerEmail: null,
     lastPartnerName: null,
@@ -948,12 +1106,38 @@ export async function declineRepeat(
  * The exam office undoing a pair, so the two teachers can choose
  * again or be moved apart.
  */
-export async function unlockPartner(duty: Duty, by: { email: string; name: string }): Promise<void> {
-  await updateDoc(doc(getDb(), "duties", duty.id), {
+/**
+ * Clears the lock on the OTHER half of a pair. A lock written on two
+ * documents has to be cleared on two documents, or the colleague is
+ * left frozen: their card still says "fixed", and the rules refuse
+ * every write they attempt.
+ */
+function releasePartnerOf(batch: ReturnType<typeof writeBatch>, duty: Duty, now: number): string | null {
+  // Only when there really is a pair. A stray address on an unlocked
+  // duty would otherwise add a write the rules refuse, taking the
+  // whole batch down with it.
+  const other = duty.partnerLocked === true && duty.partnerEmail ? dutyId(duty.date, duty.partnerEmail) : null;
+  if (!other) return null;
+  batch.update(doc(getDb(), "duties", other), {
     partnerLocked: false,
     partnerName: null,
-    updatedAt: Date.now(),
+    partnerEmail: null,
+    updatedAt: now,
   });
+  return duty.partnerName || duty.partnerEmail || null;
+}
+
+export async function unlockPartner(duty: Duty, by: { email: string; name: string }): Promise<void> {
+  const now = Date.now();
+  const batch = writeBatch(getDb());
+  batch.update(doc(getDb(), "duties", duty.id), {
+    partnerLocked: false,
+    partnerName: null,
+    partnerEmail: null,
+    updatedAt: now,
+  });
+  releasePartnerOf(batch, duty, now);
+  await batch.commit();
   await addLog({
     action: "unpaired",
     text: duty.name + " is free to choose a partner again (" + duty.date + ")",
@@ -978,14 +1162,20 @@ export async function markAttendance(
 
 /** Admin moves one teacher to another room by hand. */
 export async function moveDuty(duty: Duty, room: ExamRoomPlan, by: { email: string; name: string }): Promise<void> {
-  // Moving somebody breaks whatever pair they were in, so the lock goes too.
-  await updateDoc(doc(getDb(), "duties", duty.id), {
+  // Moving somebody breaks whatever pair they were in, so the lock
+  // goes - from both halves of it, not just this one.
+  const now = Date.now();
+  const batch = writeBatch(getDb());
+  batch.update(doc(getDb(), "duties", duty.id), {
     roomId: room.roomId,
     roomName: room.roomName,
     partnerLocked: false,
     partnerName: null,
-    updatedAt: Date.now(),
+    partnerEmail: null,
+    updatedAt: now,
   });
+  releasePartnerOf(batch, duty, now);
+  await batch.commit();
   await addLog({
     action: "moved",
     text: duty.name + " moved to " + room.roomName + " on " + duty.date,
@@ -1022,6 +1212,8 @@ export async function addDuty(opts: {
     partnerRequestAt: null,
     partnerLocked: false,
     partnerName: null,
+    partnerEmail: null,
+    pairAgain: null,
     present: null,
     markedAt: null,
     markedBy: null,
@@ -1038,7 +1230,11 @@ export async function addDuty(opts: {
 }
 
 export async function removeDuty(duty: Duty, by: { email: string; name: string }): Promise<void> {
-  await deleteDoc(doc(getDb(), "duties", duty.id));
+  const now = Date.now();
+  const batch = writeBatch(getDb());
+  releasePartnerOf(batch, duty, now);
+  batch.delete(doc(getDb(), "duties", duty.id));
+  await batch.commit();
   await addLog({
     action: "removed",
     text: duty.name + " taken off " + duty.roomName + " on " + duty.date,

@@ -41,11 +41,51 @@ service cloud.firestore {
     //   - while the exam is starting: from the start time until
     //     30 minutes later. Older duties have no startsAt, so those
     //     fall back to the screen's own check.
+    // Everything a teacher does to THEIR OWN duty: drop it, ask for a
+    // partner, answer the pairing question, ask the office for a swap.
+    function isMyOwnDuty() {
+      return resource.data.email == myEmail()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['status', 'skipReason', 'skipAt', 'partnerRequestTo', 'partnerRequestAt',
+                       'partnerLocked', 'partnerName', 'partnerEmail', 'pairAgain',
+                       'swapWantEmail', 'swapWantName', 'swapOutEmail', 'swapOutName', 'swapAt',
+                       'roomId', 'roomName', 'updatedAt'])
+        // Dropping a duty yourself is only free more than 24 hours
+        // out. Nearer than that it is the exam office's decision, and
+        // the status they write is 'skipped', not this.
+        && (
+             request.resource.data.status != 'skipped'
+             || resource.data.status == 'skipped'
+             || !('startsAt' in resource.data) || resource.data.startsAt == null
+             || request.time.toMillis() < resource.data.startsAt - 86400000
+           );
+    }
+
+    // Answering somebody who asked ME to sit with them: I may accept
+    // (which moves them into my room and fixes the pair) or refuse.
+    // Only ever the person who actually asked me.
+    function isAnswerToMyAsker() {
+      return resource.data.partnerRequestTo == myEmail()
+        && request.resource.data.diff(resource.data).affectedKeys()
+             .hasOnly(['roomId', 'roomName', 'partnerRequestTo', 'partnerRequestAt',
+                       'partnerLocked', 'partnerName', 'partnerEmail', 'updatedAt']);
+    }
+
+    // The colleague who changes room so my new partner can take their
+    // place. Room only, and only somebody sitting in the room I am in.
+    function isRoomSwapBesideMe() {
+      return request.resource.data.diff(resource.data).affectedKeys()
+               .hasOnly(['roomId', 'roomName', 'updatedAt'])
+        && exists(myDutyPath(resource.data.date))
+        && get(myDutyPath(resource.data.date)).data.roomId == resource.data.roomId;
+    }
+
     function isMyAttendance() {
       return request.resource.data.diff(resource.data).affectedKeys()
                .hasOnly(['present', 'markedAt', 'markedBy', 'updatedAt'])
         && resource.data.email == request.auth.token.email.lower()
         && request.resource.data.present != false
+        && resource.data.present != false
         && (
              !('startsAt' in resource.data) || resource.data.startsAt == null
              || (
@@ -53,6 +93,15 @@ service cloud.firestore {
                   && request.time.toMillis() <= resource.data.startsAt + 1800000
                 )
            );
+    }
+
+    function myEmail() {
+      return request.auth.token.email.lower();
+    }
+
+    /** My own duty document on a given date, if I have one. */
+    function myDutyPath(date) {
+      return /databases/$(database)/documents/duties/$(date + '__' + myEmail());
     }
 
     function myProfile() {
@@ -184,20 +233,18 @@ service cloud.firestore {
     //
     // Why teachers may write and not only read: a teacher dropping a
     // duty has to hand it to somebody else in the same moment (a new
-    // duty document) and move the two counters. Doing that from the
-    // browser keeps the app free of a server, and every one of those
-    // actions writes a line to invigLog, which only an admin can read.
-    // Nobody can quietly delete a duty: deleting is admin-only.
+    // duty document), and accepting a partner moves two other people.
+    // Doing that from the browser keeps the app free of a server. What
+    // a teacher may write is pinned down below to their own duty, the
+    // duty of somebody who asked THEM, and a room swap beside them -
+    // nothing else. Deleting is admin-only, always.
 
     match /invigilators/{email} {
       allow read: if canBook();
-      // A teacher may only move the counters (their own draw maths),
-      // never rename somebody or switch them off.
-      allow update: if isAdmin() || (
-        canBook()
-        && request.resource.data.diff(resource.data).affectedKeys()
-             .hasOnly(['duties', 'skips', 'lastDutyDate', 'updatedAt'])
-      );
+      // Counts are worked out from the duty documents themselves, so
+      // there are no counters for a teacher to move. Only the exam
+      // office edits this list.
+      allow update: if isAdmin();
       allow create, delete: if isAdmin();
     }
 
@@ -208,40 +255,59 @@ service cloud.firestore {
 
     match /duties/{dutyId} {
       allow read: if canBook();
-      // Create covers the replacement a skip hands over. The fields
-      // that say WHO and WHEN cannot be edited afterwards.
-      allow create: if canBook();
-      // Two separate doors for a teacher.
+      // A teacher creates exactly one kind of duty: the replacement
+      // handed over when somebody drops out. Everything that could be
+      // abused is pinned here rather than trusted to the browser -
+      // otherwise any teacher could forge a duty for anybody, on any
+      // date, already marked present, which would both fake a
+      // register and rig the draw (the draw counts duty documents).
+      allow create: if isAdmin() || (
+        canBook()
+        // The id must be the one the app builds, so a duty can never
+        // be duplicated under a second id.
+        && dutyId == request.resource.data.date + '__' + request.resource.data.email
+        && request.resource.data.email == request.resource.data.email.lower()
+        // Only on a real exam day.
+        && exists(/databases/$(database)/documents/examDays/$(request.resource.data.date))
+        // Not in the past: no back-filling duties that never happened.
+        && request.resource.data.startsAt is number
+        && request.resource.data.startsAt > request.time.toMillis() - 86400000
+        // Fresh and unremarkable: no attendance, no pair, no skip.
+        && request.resource.data.status == 'assigned'
+        && request.resource.data.present == null
+        && request.resource.data.markedBy == null
+        && request.resource.data.partnerLocked == false
+      );
+      // Four doors, and no more.
       //
-      // 1. Attendance, on your OWN duty only. Nobody can mark a
-      //    colleague present or absent - only the exam office can.
-      //    This stays open even for a fixed pair, otherwise two
-      //    teachers who agreed to share a room could never say
-      //    "I'm here".
-      // 2. Everything else - dropping out, asking for a partner,
-      //    accepting one, and the room swap that acceptance causes.
-      //    That last one touches somebody else's duty on purpose,
-      //    so it is not limited to your own document, but a pair
-      //    both teachers agreed to is fixed: from then on only an
-      //    admin can move either of them.
+      // 1. Attendance on your OWN duty, present only, during the
+      //    exam's first half hour. Open even inside a fixed pair,
+      //    or two paired teachers could never say "I'm here".
+      // 2. Your own duty: drop it, ask for a partner, answer the
+      //    pairing question, ask the office for a swap.
+      // 3. The duty of somebody who asked YOU: accept or refuse.
+      // 4. The colleague sitting beside you who changes room to make
+      //    space for the partner you just accepted - room only.
+      //
+      // A pair both teachers agreed to is fixed: from then on only an
+      // admin can move either of them.
       allow update: if isAdmin()
         || (canBook() && isMyAttendance())
         || (
              canBook()
              && resource.data.partnerLocked != true
-             && request.resource.data.diff(resource.data).affectedKeys()
-                  .hasOnly(['status', 'skipReason', 'skipAt', 'partnerRequestTo', 'partnerRequestAt',
-                            'partnerLocked', 'partnerName', 'pairAgain',
-                            'swapWantEmail', 'swapWantName', 'swapOutEmail', 'swapOutName', 'swapAt',
-                            'roomId', 'roomName', 'updatedAt'])
+             && (isMyOwnDuty() || isAnswerToMyAsker() || isRoomSwapBesideMe())
            );
       allow delete: if isAdmin();
     }
 
     match /invigLog/{entryId} {
       allow read: if isAdmin();
-      allow create: if canBook();
-      allow update, delete: if false;   // append only
+      // Append only, and signed: nobody can write a line under
+      // somebody else's name.
+      allow create: if canBook()
+        && request.resource.data.byEmail == myEmail();
+      allow update, delete: if false;
     }
 
 }

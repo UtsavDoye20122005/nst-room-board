@@ -109,6 +109,24 @@ function ExamsBody() {
 //  Exam days
 // ------------------------------------------------------------
 
+/**
+ * Every write on this page goes through here. Without it a refused
+ * write just makes the button appear to do nothing: the screen is
+ * driven by a live subscription, so it simply snaps back to what the
+ * database still says, with no hint that anything was rejected.
+ */
+function useRun() {
+  const { push } = useToast();
+  return (p: Promise<unknown>, ok?: string) => {
+    p.then(
+      () => {
+        if (ok) push(ok);
+      },
+      (e: Error) => push(e?.message || "That did not go through.", "bad")
+    );
+  };
+}
+
 function DaysPanel() {
   const { push } = useToast();
   const { profile } = useAuth();
@@ -125,7 +143,12 @@ function DaysPanel() {
   useEffect(() => subscribeInvigilators(setInvigilators, (e) => push(e.message, "bad")), [push]);
   useEffect(() => subscribeAllDuties(setAllDuties, (e) => push(e.message, "bad")), [push]);
 
-  const selected = days.find((d) => d.id === selectedId) || days[0] || null;
+  // days arrive newest-first. With nothing chosen, open the exam that
+  // is actually next - today's or the soonest ahead - and only fall
+  // back to the most recent past one when there is nothing ahead.
+  const today = todayISO();
+  const nearest = [...days].reverse().find((d) => d.date >= today) || days[0] || null;
+  const selected = days.find((d) => d.id === selectedId) || nearest;
 
   useEffect(() => {
     if (!selected) return;
@@ -135,29 +158,64 @@ function DaysPanel() {
 
   const by = { email: profile?.email || "", name: profile?.name || "Admin" };
 
+  const run = useRun();
+
   const busy = useMemo(() => {
     if (!selected) return new Set<string>();
     return busyEmailsOn(selected, campus.bookings, campus.users);
   }, [selected, campus.bookings, campus.users]);
 
+  // The timetable is fetched a day at a time. Straight after switching
+  // exam day it still holds the PREVIOUS day's classes, and every one
+  // of those is filtered out by date - so the clash check would pass
+  // everybody. Anything left over from another date means not yet.
+  const bookingsReady =
+    !!selected && campus.users.length > 0 && campus.bookings.every((b) => b.date === selected.date);
+
   // How many duties each teacher has done, counted from the duty
   // records themselves so the number can never drift.
   const tally = useMemo(() => tallyDuties(allDuties), [allDuties]);
+
+  // Counts for the draw ignore this day's own duties. Redrawing must
+  // not punish the people who happen to be holding the duties that are
+  // about to be deleted, or "Draw again" just rotates everybody off.
+  const tallyForDraw = useMemo(
+    () => tallyDuties(selected ? allDuties.filter((d) => d.date !== selected.date) : allDuties),
+    [allDuties, selected]
+  );
 
   const pool: PoolMember[] = useMemo(
     () =>
       invigilators
         .filter((i) => i.active !== false && !busy.has(cleanEmail(i.email)))
-        .map((i) => ({ email: i.email, name: i.name, duties: (tally.get(i.email) || EMPTY_TALLY).duties })),
-    [invigilators, busy, tally]
+        .map((i) => ({ email: i.email, name: i.name, duties: (tallyForDraw.get(i.email) || EMPTY_TALLY).duties })),
+    [invigilators, busy, tallyForDraw]
   );
 
   async function assign() {
     if (!selected) return;
     const needed = selected.rooms.filter((r) => r.used !== false).reduce((n, r) => n + r.needed, 0);
+    if (!bookingsReady) {
+      push("Still reading the timetable for that day. Try again in a second.", "bad");
+      return;
+    }
     if (!pool.length) {
       push("No teacher is free for that time. Add teachers first.", "bad");
       return;
+    }
+    // Drawing again throws away everything on this day, including
+    // anything already recorded. Say so before it happens.
+    const marked = duties.filter((d) => d.present != null).length;
+    const pairs = duties.filter((d) => d.partnerLocked).length;
+    if (duties.length) {
+      const losing = [
+        duties.length + (duties.length === 1 ? " duty" : " duties"),
+        pairs ? pairs / 2 + " agreed pair(s)" : "",
+        marked ? marked + " attendance mark(s)" : "",
+      ].filter(Boolean);
+      if (!window.confirm("Draw again? This replaces " + losing.join(", ") + " for " + prettyDate(selected.date) + ".")) {
+        return;
+      }
     }
     const plan = planAssignments({
       rooms: selected.rooms,
@@ -186,7 +244,11 @@ function DaysPanel() {
     (e) => !duties.some((d) => d.email === e && d.status !== "skipped")
   );
   const namesByEmail = new Map(invigilators.map((i) => [i.email, i.name]));
-  const assigned = duties.filter((d) => d.status === "assigned");
+  // A teacher waiting on the office to approve their drop still holds
+  // the duty, and the room cards and the PDF both count them, so this
+  // has to as well or the header contradicts the page under it.
+  const assigned = duties.filter((d) => d.status !== "skipped");
+  const onDutyEmails = new Set(assigned.map((d) => d.email));
   const neededTotal = selected ? selected.rooms.filter((r) => r.used !== false).reduce((n, r) => n + r.needed, 0) : 0;
 
   return (
@@ -259,10 +321,14 @@ function DaysPanel() {
                 <Stat label="Assigned" value={String(assigned.length)} tone={assigned.length < neededTotal ? "warn" : "ok"} />
                 <Stat
                   label="Spare teachers"
-                  value={String(Math.max(0, pool.length - assigned.length))}
+                  value={String(pool.filter((p) => !onDutyEmails.has(cleanEmail(p.email))).length)}
                   hint="free at this hour and not on duty"
                 />
-                <Stat label="Busy with a class" value={String(busy.size)} hint="left out of the draw" />
+                <Stat
+                  label="Busy with a class"
+                  value={String(invigilators.filter((i) => i.active !== false && busy.has(cleanEmail(i.email))).length)}
+                  hint="left out of the draw"
+                />
                 <Stat label="On standby" value={String(standby.length)} />
               </div>
               {assigned.length === 0 ? (
@@ -286,7 +352,10 @@ function DaysPanel() {
                         <button
                           className="btn btn-sm"
                           onClick={() =>
-                            void decideSkip({ duty: d, approve: false, pool, takenEmails: duties.map((x) => x.email), by })
+                            run(
+                              decideSkip({ duty: d, approve: false, pool, takenEmails: duties.map((x) => x.email), by }),
+                              d.name + " stays on " + d.roomName + "."
+                            )
                           }
                         >
                           Keep them on
@@ -294,7 +363,10 @@ function DaysPanel() {
                         <button
                           className="btn btn-sm btn-primary"
                           onClick={() =>
-                            void decideSkip({ duty: d, approve: true, pool, takenEmails: duties.map((x) => x.email), by })
+                            run(
+                              decideSkip({ duty: d, approve: true, pool, takenEmails: duties.map((x) => x.email), by }),
+                              "Dropped. A replacement was drawn if anybody was free."
+                            )
                           }
                         >
                           Allow and replace
@@ -324,7 +396,7 @@ function DaysPanel() {
                         <button
                           className="btn btn-sm"
                           onClick={() =>
-                            void decideSwapIn({ duty: d, approve: false, by }).then(() => push("Left as it is."))
+                            run(decideSwapIn({ duty: d, approve: false, by }), "Left as it is.")
                           }
                         >
                           Leave it
@@ -332,8 +404,9 @@ function DaysPanel() {
                         <button
                           className="btn btn-sm btn-primary"
                           onClick={() =>
-                            void decideSwapIn({ duty: d, approve: true, by }).then(() =>
-                              push(d.swapWantName + " is in, " + d.swapOutName + " is off.")
+                            run(
+                              decideSwapIn({ duty: d, approve: true, by }),
+                              d.swapWantName + " is in, " + d.swapOutName + " is off."
                             )
                           }
                         >
@@ -383,10 +456,7 @@ function DaysPanel() {
                 className="btn btn-danger"
                 onClick={() => {
                   if (!window.confirm("Delete " + prettyDate(selected.date) + " and all its duties?")) return;
-                  void deleteExamDay(selected).then(() => {
-                    setSelectedId("");
-                    push("Exam day deleted.");
-                  });
+                  run(deleteExamDay(selected).then(() => setSelectedId("")), "Exam day deleted.");
                 }}
               >
                 Delete this exam day
@@ -448,6 +518,7 @@ function RoomCard({
   by: { email: string; name: string };
 }) {
   const { push } = useToast();
+  const run = useRun();
   const [adding, setAdding] = useState("");
   const here = duties.filter((d) => d.status !== "skipped");
   const short = room.needed - here.length;
@@ -485,9 +556,10 @@ function RoomCard({
               className="btn btn-sm ml-auto"
               title="Mark everybody in this room present"
               onClick={() =>
-                void Promise.all(
-                  here.filter((d) => d.present == null).map((d) => markAttendance(d, true, by))
-                ).then(() => push("Everybody in " + room.roomName + " marked present."))
+                run(
+                  Promise.all(here.filter((d) => d.present == null).map((d) => markAttendance(d, true, by))),
+                  "Everybody in " + room.roomName + " marked present."
+                )
               }
             >
               All present
@@ -505,7 +577,7 @@ function RoomCard({
               <button
                 className="pill text-accent"
                 title={"Fixed with " + (d.partnerName || "a colleague") + ". Click to undo the pair."}
-                onClick={() => void unlockPartner(d, by).then(() => push("Pair undone. They can choose again."))}
+                onClick={() => run(unlockPartner(d, by), "Pair undone. They can choose again.")}
               >
                 paired with {d.partnerName}
               </button>
@@ -519,14 +591,14 @@ function RoomCard({
               <button
                 className={"btn btn-sm " + (d.present === true ? "btn-primary" : "")}
                 title={d.present === true ? "Marked present - click to clear" : "Mark present"}
-                onClick={() => void markAttendance(d, d.present === true ? null : true, by)}
+                onClick={() => run(markAttendance(d, d.present === true ? null : true, by))}
               >
                 Present
               </button>
               <button
                 className={"btn btn-sm " + (d.present === false ? "btn-danger" : "")}
                 title={d.present === false ? "Marked absent - click to clear" : "Mark absent"}
-                onClick={() => void markAttendance(d, d.present === false ? null : false, by)}
+                onClick={() => run(markAttendance(d, d.present === false ? null : false, by))}
               >
                 Absent
               </button>
@@ -541,7 +613,7 @@ function RoomCard({
                 }
                 onChange={(e) => {
                   const target = day.rooms.find((r) => r.roomId === e.target.value);
-                  if (target) void moveDuty(d, target, by);
+                  if (target) run(moveDuty(d, target, by), d.name + " moved to " + target.roomName + ".");
                 }}
               >
                 <option value="">Move…</option>
@@ -551,7 +623,14 @@ function RoomCard({
                   </option>
                 ))}
               </select>
-              <button className="btn btn-sm btn-danger" title="Take off duty" onClick={() => void removeDuty(d, by)}>
+              <button
+                className="btn btn-sm btn-danger"
+                title="Take off duty"
+                onClick={() => {
+                  if (d.present != null && !window.confirm(d.name + " has already been marked. Take them off anyway?")) return;
+                  run(removeDuty(d, by), d.name + " taken off " + d.roomName + ".");
+                }}
+              >
                 −
               </button>
             </span>
@@ -574,10 +653,10 @@ function RoomCard({
           onClick={() => {
             const person = invigilators.find((i) => i.email === adding);
             if (!person) return;
-            void addDuty({ day, room, person: { email: person.email, name: person.name }, by }).then(() => {
-              setAdding("");
-              push(person.name + " added to " + room.roomName + ".");
-            });
+            run(
+              addDuty({ day, room, person: { email: person.email, name: person.name }, by }).then(() => setAdding("")),
+              person.name + " added to " + room.roomName + "."
+            );
           }}
         >
           Add
@@ -605,7 +684,14 @@ function DayForm({
   const [endSlot, setEndSlot] = useState(initial?.endSlot ?? 5);
   const [reserveCount, setReserveCount] = useState(initial?.reserveCount ?? 2);
   const [rooms, setRooms] = useState<ExamRoomPlan[]>(
-    initial?.rooms?.length ? initial.rooms : roomPlansFrom(campus.rooms)
+    () => {
+      const fresh = roomPlansFrom(campus.rooms);
+      if (!initial?.rooms?.length) return fresh;
+      // Keep what was chosen, and let a room added to the campus since
+      // then show up here too, unticked.
+      const known = new Set(initial.rooms.map((r) => r.roomId));
+      return [...initial.rooms, ...fresh.filter((r) => !known.has(r.roomId)).map((r) => ({ ...r, used: false }))];
+    }
   );
   const [saving, setSaving] = useState(false);
 
@@ -665,7 +751,19 @@ function DayForm({
         <div className="grid gap-3 sm:grid-cols-2">
           <label className="grid gap-1">
             <span className="label-xs">Date</span>
-            <input type="date" className="input" value={date} onChange={(e) => setDate(e.target.value)} />
+            <input
+              type="date"
+              className="input"
+              value={date}
+              disabled={!!initial}
+              title={initial ? "The duties are filed under this date. To move the exam, delete this day and make a new one." : ""}
+              onChange={(e) => setDate(e.target.value)}
+            />
+            {initial ? (
+              <span className="text-[12px] text-muted">
+                Fixed — every duty is filed under it. To move the exam, delete this day and make a new one.
+              </span>
+            ) : null}
           </label>
           <label className="grid gap-1">
             <span className="label-xs">Name</span>
@@ -774,6 +872,7 @@ function nextFriday(): string {
 
 function TeachersPanel() {
   const { push } = useToast();
+  const run = useRun();
   const campus = useCampus();
   const [list, setList] = useState<Invigilator[]>([]);
   const [duties, setDuties] = useState<Duty[]>([]);
@@ -817,8 +916,9 @@ function TeachersPanel() {
           <button
             className="btn"
             onClick={() =>
-              void importFaculty(campus.users).then((n) =>
-                push(n ? n + " teachers brought in from the logins." : "Everybody with a login is already on the list.")
+              importFaculty(campus.users).then(
+                (n) => push(n ? n + " teachers brought in from the logins." : "Everybody with a login is already on the list."),
+                (e: Error) => push(e.message, "bad")
               )
             }
           >
@@ -869,7 +969,7 @@ function TeachersPanel() {
                   <input
                     type="checkbox"
                     checked={i.active !== false}
-                    onChange={(e) => void setInvigilatorActive(i.email, e.target.checked)}
+                    onChange={(e) => run(setInvigilatorActive(i.email, e.target.checked))}
                   />
                 </td>
                 <td className="px-3 py-2 text-right">
@@ -877,7 +977,7 @@ function TeachersPanel() {
                     className="btn btn-sm btn-danger"
                     onClick={() => {
                       if (!window.confirm("Remove " + i.name + " from the invigilator list?")) return;
-                      void deleteInvigilator(i.email);
+                      run(deleteInvigilator(i.email), i.name + " removed from the list.");
                     }}
                   >
                     Remove

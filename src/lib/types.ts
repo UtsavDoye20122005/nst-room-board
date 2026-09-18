@@ -227,6 +227,12 @@ export interface Duty {
   partnerLocked?: boolean;
   partnerName?: string | null;
   /**
+   * The other half of the pair, by address. A name is not an identity
+   * - two rooms can hold two people with the same name - and without
+   * this the lock can only be cleared on one side.
+   */
+  partnerEmail?: string | null;
+  /**
    * "no" means this teacher was asked whether they wanted the same
    * partner as last time and said no, so the question stops coming
    * back and they get the list of everybody free instead. Every fresh

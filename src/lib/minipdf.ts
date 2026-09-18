@@ -40,12 +40,19 @@ const FOLD: Record<string, string> = {
 };
 
 const clean = (s: string) =>
-  Array.from(String(s))
+  // Accents first: the width tables here only cover ASCII, so "Zoë"
+  // has to become "Zoe" rather than "Zo?".
+  Array.from(String(s).normalize("NFD").replace(/[\u0300-\u036f]/g, ""))
     .map((ch) => {
-      const folded = FOLD[ch] ?? ch;
-      if (folded.length > 1) return folded;
-      const c = folded.charCodeAt(0);
-      return (c >= 32 && c <= 126) || folded === "\u00b7" ? folded : "?";
+      const folded = FOLD[ch];
+      if (folded) return folded;
+      // Array.from walks whole code points, so an emoji or a rare CJK
+      // character arrives here as a two-unit string. Writing it out
+      // raw would put a stray byte - often "(" from a low surrogate -
+      // inside a PDF string and swallow the rest of the page.
+      if (ch.length > 1 || ch.codePointAt(0)! > 0xff) return "?";
+      const c = ch.charCodeAt(0);
+      return (c >= 32 && c <= 126) || ch === "\u00b7" ? ch : "?";
     })
     .join("");
 

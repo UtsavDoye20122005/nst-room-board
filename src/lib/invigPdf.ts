@@ -4,7 +4,7 @@
 // ============================================================
 
 import { MiniPdf, type Rgb } from "./minipdf";
-import { prettyDate } from "./dates";
+import { prettyDate, shortDate } from "./dates";
 import { slotRange } from "./slots";
 import type { Duty, ExamDay } from "./types";
 import type { Tally } from "./invigilation";
@@ -51,26 +51,31 @@ export function attendanceSheet(day: ExamDay, duties: Duty[], names?: Map<string
       y = M + 6;
     }
 
-    // Room header bar
-    pdf.setFill(HEAD);
-    pdf.rect(M, y - 5, W - 2 * M, 8);
-    pdf.setInk([236, 241, 246]);
-    pdf.setFont("HB", 9.5);
-    pdf.text(inRoom[0].roomName, M + 3, y + 0.5);
-    pdf.setFont("H", 8.5);
-    pdf.text(inRoom.length + (inRoom.length === 1 ? " invigilator" : " invigilators"), W - M - 3, y + 0.5, "right");
-    y += 7;
-
-    pdf.setInk(MUTED);
-    pdf.setFont("H", 7.5);
-    pdf.text("NAME", M + 3, y + 3);
-    pdf.text("PRESENT", colPresent, y + 3);
-    y += 5;
+    // The room header and the column heads, drawn again at the top of
+    // every page a room runs onto - a page of bare names belonging to
+    // no visible room is useless at a desk.
+    const header = (cont: boolean) => {
+      pdf.setFill(HEAD);
+      pdf.rect(M, y - 5, W - 2 * M, 8);
+      pdf.setInk([236, 241, 246]);
+      pdf.setFont("HB", 9.5);
+      pdf.text(inRoom[0].roomName + (cont ? " (continued)" : ""), M + 3, y + 0.5);
+      pdf.setFont("H", 8.5);
+      pdf.text(inRoom.length + (inRoom.length === 1 ? " invigilator" : " invigilators"), W - M - 3, y + 0.5, "right");
+      y += 7;
+      pdf.setInk(MUTED);
+      pdf.setFont("H", 7.5);
+      pdf.text("NAME", M + 3, y + 3);
+      pdf.text("PRESENT", colPresent, y + 3);
+      y += 5;
+    };
+    header(false);
 
     inRoom.forEach((d, i) => {
       if (y > 297 - M - 14) {
         pdf.addPage();
         y = M + 6;
+        header(true);
       }
       pdf.setFill(i % 2 === 0 ? ZEBRA : WHITE);
       pdf.rect(M, y - 1.5, W - 2 * M, rowH);
@@ -116,7 +121,10 @@ export function attendanceSheet(day: ExamDay, duties: Duty[], names?: Map<string
     pdf.setFont("H", 9.5);
     pdf.setInk(INK);
     // Names, not email addresses - this sheet goes on a desk.
-    pdf.text(standbyLeft.map((e) => names?.get(e) || e).join("   ·   "), M, y);
+    const line = standbyLeft.map((e) => names?.get(e) || e).join("   ·   ");
+    pdf.fit(line, W - 2 * M, 9.5, 6.5);
+    pdf.text(line, M, y);
+    pdf.setFont("H", 9.5);
     y += 8;
   }
 
@@ -163,9 +171,12 @@ export function dutyLogSheet(
   y += 8;
 
   // ---- summary table
-  const colDuties = W - M - 58;
-  const colSkips = W - M - 36;
-  const colLast = W - M - 22;
+  // Right edge of the printable area is W - M = 195mm. The three
+  // right-hand columns are laid out back from there so the numbers sit
+  // under their headings and the dates still fit.
+  const colDuties = W - M - 62;
+  const colSkips = W - M - 44;
+  const colLast = W - M - 32;
 
   pdf.setFill(HEAD);
   pdf.rect(M, y - 5, W - 2 * M, 8);
@@ -178,10 +189,22 @@ export function dutyLogSheet(
   y += 7;
 
   const rowH = 7;
+  const heads = () => {
+    pdf.setFill(HEAD);
+    pdf.rect(M, y - 5, W - 2 * M, 8);
+    pdf.setInk([236, 241, 246]);
+    pdf.setFont("HB", 8);
+    pdf.text("TEACHER", M + 3, y + 0.5);
+    pdf.text("DUTIES", colDuties, y + 0.5);
+    pdf.text("SKIPS", colSkips, y + 0.5);
+    pdf.text("LAST", colLast, y + 0.5);
+    y += 7;
+  };
   rows.forEach((r, i) => {
     if (y > 297 - M - 12) {
       pdf.addPage();
       y = M + 6;
+      heads();
     }
     pdf.setFill(i % 2 === 0 ? ZEBRA : WHITE);
     pdf.rect(M, y - 1, W - 2 * M, rowH);
@@ -190,12 +213,13 @@ export function dutyLogSheet(
     pdf.fit(r.name, colDuties - M - 8, 9.5);
     pdf.text(r.name, M + 3, y + 4);
     pdf.setFont("HB", 9.5);
-    pdf.text(String(r.tally.duties), colDuties + 6, y + 4, "right");
+    pdf.text(String(r.tally.duties), colDuties + 11, y + 4, "right");
     pdf.setFont("H", 9.5);
     pdf.setInk(MUTED);
-    pdf.text(String(r.tally.skips), colSkips + 4, y + 4, "right");
+    pdf.text(String(r.tally.skips), colSkips + 9, y + 4, "right");
     pdf.setFont("H", 8.5);
-    pdf.text(r.tally.last ? prettyDate(r.tally.last) : "—", colLast, y + 4);
+    // Short form: the long one runs past the right margin.
+    pdf.text(r.tally.last ? shortDate(r.tally.last) : "-", colLast, y + 4);
     y += rowH;
   });
 
@@ -227,7 +251,7 @@ export function dutyLogSheet(
       pdf.setInk(d.status === "skipped" ? MUTED : INK);
       const marks =
         (d.status === "skipped" ? "dropped" : d.present === true ? "present" : d.present === false ? "absent" : "");
-      pdf.text(prettyDate(d.date) + "   " + d.roomName + (marks ? "   " + marks : ""), M + 4, y);
+      pdf.text(shortDate(d.date) + "   " + d.roomName + (marks ? "   " + marks : ""), M + 4, y);
       y += 4.6;
     }
     y += 4;

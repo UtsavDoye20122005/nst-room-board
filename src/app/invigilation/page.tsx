@@ -59,18 +59,29 @@ function Body() {
   const [invigilators, setInvigilators] = useState<Invigilator[]>([]);
   const [allDuties, setAllDuties] = useState<Duty[]>([]);
 
+  // Students are not invigilators and cannot read any of these
+  // collections, so subscribing would only produce a stack of
+  // permission errors behind the friendly card below.
+  const isStaff = profile?.role === "faculty" || profile?.role === "admin";
+
   useEffect(() => {
-    if (!email) return;
+    if (!email || !isStaff) return;
     return subscribeDutiesFor(email, setMine, (e) => push(e.message, "bad"));
-  }, [email, push]);
+  }, [email, isStaff, push]);
 
   useEffect(() => {
-    if (!email) return;
+    if (!email || !isStaff) return;
     return subscribePartnerRequests(email, setRequests, (e) => push(e.message, "bad"));
-  }, [email, push]);
+  }, [email, isStaff, push]);
 
-  useEffect(() => subscribeInvigilators(setInvigilators, () => {}), []);
-  useEffect(() => subscribeAllDuties(setAllDuties, () => {}), []);
+  useEffect(() => {
+    if (!isStaff) return;
+    return subscribeInvigilators(setInvigilators, () => {});
+  }, [isStaff]);
+  useEffect(() => {
+    if (!isStaff) return;
+    return subscribeAllDuties(setAllDuties, () => {});
+  }, [isStaff]);
 
   const today = todayISO();
   const upcoming = mine.filter((d) => d.date >= today && d.status !== "skipped").sort((a, b) => a.date.localeCompare(b.date));
@@ -112,7 +123,7 @@ function Body() {
       ) : null}
 
       {next ? (
-        <DutyCard duty={next} me={me} invigilators={invigilators} tally={tally} isNext />
+        <DutyCard key={next.id} duty={next} me={me} invigilators={invigilators} tally={tally} isNext />
       ) : (
         <div className="card p-6">
           <h2 className="text-lg font-semibold">No invigilation coming up</h2>
@@ -182,8 +193,11 @@ function DutyCard({
     return () => clearInterval(t);
   }, [isToday]);
   const window_ = attendanceWindow(duty, now);
-  const onDutyToday = sameDay.filter((d) => d.email !== duty.email && d.status !== "skipped");
-  const inMyRoom = onDutyToday.filter((d) => d.roomId === duty.roomId);
+  // "assigned" only: somebody who has asked to drop the duty is not
+  // somebody to pair with, and neither is somebody already gone.
+  const onDutyToday = sameDay.filter((d) => d.email !== duty.email && d.status === "assigned");
+  const inTheRoom = sameDay.filter((d) => d.email !== duty.email && d.status !== "skipped");
+  const inMyRoom = inTheRoom.filter((d) => d.roomId === duty.roomId);
   // Only somebody in a different room is worth asking - being with
   // the people already next to you is not a request.
   const others = onDutyToday.filter((d) => d.roomId !== duty.roomId && !d.partnerLocked);
@@ -222,7 +236,7 @@ function DutyCard({
   // the office to swap in.
   const nothingToOffer = others.length === 0 && !(onlyRoommate && spares.length > 0);
 
-  const roommate = inMyRoom.find((d) => d.partnerLocked !== true);
+  const roommate = inMyRoom.find((d) => d.partnerLocked !== true && d.status === "assigned");
   const question: { who: { email: string; name: string }; text: string } | null = quiet
     ? null
     : roommate
@@ -272,6 +286,7 @@ function DutyCard({
         free,
         pool,
         takenEmails: sameDay.map((d) => d.email),
+        waitingOnMe: sameDay.filter((d) => d.partnerRequestTo === duty.email && d.email !== duty.email),
         by: me,
       });
       setAsking(false);
@@ -305,7 +320,7 @@ function DutyCard({
         </div>
         {isToday && duty.status !== "skipped" ? (
           <div className="max-w-[15rem] text-right">
-            {window_.open ? (
+            {window_.open && duty.present !== false ? (
               <button
                 className={"btn " + (duty.present === true ? "" : "btn-primary")}
                 onClick={() =>
@@ -476,12 +491,12 @@ function DutyCard({
           <div>
             <div className="label-xs">Partner</div>
             <p className="mt-1 text-[13.5px] text-ink-2">
-              {somebodyAskedMe
+              {droppingOut
+                ? "Nothing to settle while your request to drop this duty is with the exam office."
+                : somebodyAskedMe
                 ? "Somebody has asked to be with you — the answer is at the top of this page."
                 : onDutyToday.length === 0
                 ? "You are the only teacher on duty that day, so there is nobody to pair with."
-                : droppingOut
-                ? "Nothing to decide while your request to drop this duty is with the exam office."
                 : duty.pairAgain === "no" && nothingToOffer
                 ? "You asked for a different partner, but nobody else is free that day. The exam office has it on their list."
                 : inMyRoom.length > 0
@@ -558,7 +573,10 @@ function PartnerRequest({ asker, mine, me }: { asker: Duty; mine: Duty[]; me: { 
         <span className="text-muted">
           asked to be with you, but you are already fixed with {myDuty.partnerName}.
         </span>
-        <button className="btn btn-sm ml-auto" onClick={() => void declinePartner(asker)}>
+        <button
+          className="btn btn-sm ml-auto"
+          onClick={() => void declinePartner(asker).catch((e: Error) => push(e.message, "bad"))}
+        >
           Clear
         </button>
       </li>
@@ -572,7 +590,10 @@ function PartnerRequest({ asker, mine, me }: { asker: Duty; mine: Duty[]; me: { 
         wants to invigilate with you on {prettyDate(asker.date)} ({myDuty.roomName})
       </span>
       <span className="ml-auto flex gap-2">
-        <button className="btn btn-sm" onClick={() => void declinePartner(asker).then(() => push("Said no."))}>
+        <button
+          className="btn btn-sm"
+          onClick={() => void declinePartner(asker).then(() => push("Said no."), (e: Error) => push(e.message, "bad"))}
+        >
           No
         </button>
         <button
@@ -583,7 +604,10 @@ function PartnerRequest({ asker, mine, me }: { asker: Duty; mine: Duty[]; me: { 
               me: myDuty,
               othersInMyRoom: sameDay.filter((d) => d.roomId === myDuty.roomId),
               by: me,
-            }).then(() => push("Done. You are both in " + myDuty.roomName + "."))
+            }).then(
+              () => push("Done. You are both in " + myDuty.roomName + "."),
+              (e: Error) => push(e.message, "bad")
+            )
           }
         >
           Yes, same room

@@ -239,6 +239,25 @@ Everything above has been walked through in code and the types compile clean.
 The draw, the pair lock, the skip rules, both PDFs and the live updates between
 two windows are all wired.
 
+## What the rules stop, even outside the app
+
+The screen is a convenience; these are enforced in `firestore.rules`, so they
+hold whether somebody uses the app, the browser console, or a script:
+
+- A teacher may write attendance only on **their own** duty, only as *present*,
+  only during the exam's first 30 minutes, and never over an *absent* the exam
+  office recorded.
+- A teacher may edit only their own duty, the duty of somebody who asked *them*
+  to pair, and the room of a colleague sitting in the same room (the swap that
+  accepting a partner needs). Nothing else.
+- Dropping a duty yourself only works more than 24 hours out. Nearer than that
+  the status a teacher can write is *requested*, and only an admin can approve.
+- A teacher can create a duty only as a hand-over: right id, real exam day, not
+  in the past, no attendance on it, no pair, not already dropped.
+- A log line must be signed by whoever writes it, and can never be edited or
+  deleted.
+- Deleting anything is admin-only.
+
 ## Edge cases, and what happens in each
 
 **Handled, worth trying once:**
