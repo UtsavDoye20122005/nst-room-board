@@ -18,7 +18,7 @@
 //
 //  Admin-only: the caller (src/app/api/notify/route.ts) only invokes
 //  this when the signed-in person is an admin - faculty can still
-//  email staff, but cannot post to Slack. That's enforced there, not
+//  make a booking, but cannot post to Slack. That's enforced there, not
 //  here, but is worth knowing when reading this file.
 //
 //  Messages read as a plain announcement to students, not a system

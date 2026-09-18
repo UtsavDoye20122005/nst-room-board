@@ -101,7 +101,6 @@ export function BookingModal({
   const [years, setYears] = useState<number[]>(profile?.years || []);
   const [batchIds, setBatchIds] = useState<string[]>([]);
   const [note, setNote] = useState("");
-  const [sendEmail, setSendEmail] = useState(false);
   const [sendSlack, setSendSlack] = useState(true);
   const [repeatWeekly, setRepeatWeekly] = useState(false);
   const [untilDate, setUntilDate] = useState(() => shiftDays(date, 7 * 15)); // ~one semester
@@ -240,9 +239,9 @@ export function BookingModal({
 
       // Each channel is its own checkbox now - only call at all if at
       // least one of them is actually wanted for this booking.
-      if (sendEmail || sendSlack) {
+      if (sendSlack) {
         for (const id of notifyIds) {
-          const res = await notifyStudents(id, "booked", undefined, sendEmail, sendSlack);
+          const res = await notifyStudents(id, "booked", undefined, sendSlack);
           if (!res.ok) push(res.message, "bad");
         }
       }
@@ -492,20 +491,6 @@ export function BookingModal({
           </label>
         )}
 
-        <label className="flex cursor-pointer items-start gap-2.5 sm:col-span-2">
-          <input
-            type="checkbox"
-            className="mt-0.5 accent-[var(--accent)]"
-            checked={sendEmail}
-            onChange={(e) => setSendEmail(e.target.checked)}
-          />
-          <span className="text-[13.5px]">
-            Also email staff about this
-            <span className="mt-0.5 block text-[12px] text-muted">
-              Off by default. Email reaches staff who have signed in at least once - never students.
-            </span>
-          </span>
-        </label>
       </div>
     </Modal>
   );

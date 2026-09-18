@@ -4,7 +4,7 @@
 //  Session details, plus everything a teacher can do to it:
 //  change the room, cancel it, put it back, remove it.
 //
-//  Each action runs as a transaction and then offers to email
+//  Each action runs as a transaction and then offers to announce
 //  the affected batches.
 // ============================================================
 
@@ -41,7 +41,6 @@ export function SessionSheet({ booking, onClose }: { booking: Booking; onClose: 
   const [err, setErr] = useState<string | null>(null);
   const [reason, setReason] = useState("");
   const [toRoom, setToRoom] = useState("");
-  const [sendEmail, setSendEmail] = useState(false);
   const [sendSlack, setSendSlack] = useState(true);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [cancelWholeSeries, setCancelWholeSeries] = useState(false);
@@ -106,8 +105,8 @@ export function SessionSheet({ booking, onClose }: { booking: Booking; onClose: 
                   const to = roomName(target);
                   await moveBooking(booking, target, from, to, profile!.uid, profile!.name);
                   push("Moved to " + to);
-                  if (sendEmail || sendSlack) {
-                    const res = await notifyStudents(booking.id, "moved", undefined, sendEmail, sendSlack);
+                  if (sendSlack) {
+                    const res = await notifyStudents(booking.id, "moved", undefined, sendSlack);
                     push(res.message, res.ok ? "info" : "bad");
                   }
                   onClose();
@@ -150,13 +149,6 @@ export function SessionSheet({ booking, onClose }: { booking: Booking; onClose: 
           </label>
         )}
 
-        <label className="mt-2 flex cursor-pointer items-start gap-2.5">
-          <input type="checkbox" className="mt-0.5 accent-[var(--accent)]" checked={sendEmail} onChange={(e) => setSendEmail(e.target.checked)} />
-          <span className="text-[13.5px]">
-            Also email staff about the change
-            <span className="mt-0.5 block text-[12px] text-muted">Off by default.</span>
-          </span>
-        </label>
       </Modal>
     );
   }
@@ -184,15 +176,15 @@ export function SessionSheet({ booking, onClose }: { booking: Booking; onClose: 
                       reason.trim(), profile!.uid, profile!.name
                     );
                     push(n + " week" + (n === 1 ? "" : "s") + " cancelled, from " + shortDate(booking.date) + " onward");
-                    if (sendEmail || sendSlack) {
-                      const res = await notifyStudents(booking.id, "cancelled", reason.trim(), sendEmail, sendSlack);
+                    if (sendSlack) {
+                      const res = await notifyStudents(booking.id, "cancelled", reason.trim(), sendSlack);
                       push(res.message, res.ok ? "info" : "bad");
                     }
                   } else {
                     await cancelBooking(booking, roomName(booking.roomId), reason.trim(), profile!.uid, profile!.name);
                     push("This week cancelled" + (isSeries ? " — the rest of the series is untouched" : ""));
-                    if (sendEmail || sendSlack) {
-                      const res = await notifyStudents(booking.id, "cancelled", reason.trim(), sendEmail, sendSlack);
+                    if (sendSlack) {
+                      const res = await notifyStudents(booking.id, "cancelled", reason.trim(), sendSlack);
                       push(res.message, res.ok ? "info" : "bad");
                     }
                   }
@@ -266,13 +258,6 @@ export function SessionSheet({ booking, onClose }: { booking: Booking; onClose: 
           </label>
         )}
 
-        <label className="mt-2 flex cursor-pointer items-start gap-2.5">
-          <input type="checkbox" className="mt-0.5 accent-[var(--accent)]" checked={sendEmail} onChange={(e) => setSendEmail(e.target.checked)} />
-          <span className="text-[13.5px]">
-            Also email staff about the cancellation
-            <span className="mt-0.5 block text-[12px] text-muted">Off by default.</span>
-          </span>
-        </label>
       </Modal>
     );
   }
@@ -423,7 +408,7 @@ export function SessionSheet({ booking, onClose }: { booking: Booking; onClose: 
       {!canEdit && !cancelled ? (
         <p className="mt-4 text-[13px] text-muted">
           {profile?.role === "student"
-            ? "Check the board before you set off — if the room changes you will see it here and get an email."
+            ? "Check the board before you set off — if the room changes you will see it here."
             : "Only " + booking.facultyName + " or an admin can change this booking."}
         </p>
       ) : null}

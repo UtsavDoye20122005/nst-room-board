@@ -355,9 +355,11 @@ function BatchRow({
   onDelete: () => Promise<void>;
 }) {
   const [d, setD] = useState(batch);
-  const [emailText, setEmailText] = useState((batch.extraEmails || []).join("\n"));
+  // Kept, not shown: these addresses were only ever used to copy people
+  // on the notice emails, and nothing mails anybody now. Carried through
+  // a save so an old list is preserved rather than quietly wiped.
+  const keptEmails = batch.extraEmails || [];
   const [confirm, setConfirm] = useState(false);
-  const [showEmails, setShowEmails] = useState(false);
   const [showStudents, setShowStudents] = useState(false);
   const [roster, setRoster] = useState<RosterEntry[] | null>(null);
   const [rosterBusy, setRosterBusy] = useState(false);
@@ -378,9 +380,8 @@ function BatchRow({
     }
   }
 
-  const parsed = emailText.split(/[\s,;]+/).map((x) => x.trim()).filter((x) => x.includes("@"));
   const dirty =
-    JSON.stringify({ ...d, extraEmails: parsed }) !== JSON.stringify(batch);
+    JSON.stringify({ ...d, extraEmails: keptEmails }) !== JSON.stringify(batch);
 
   return (
     <div className="border-b border-line px-4 py-3 last:border-b-0">
@@ -408,7 +409,6 @@ function BatchRow({
           <span className="label-xs">Signed in</span>
           <p className="mt-1 text-[13px] tnum">
             {signedInCount} student{signedInCount === 1 ? "" : "s"}
-            {parsed.length ? <span className="text-muted"> · {parsed.length} extra email{parsed.length === 1 ? "" : "s"}</span> : null}
           </p>
         </div>
 
@@ -416,13 +416,10 @@ function BatchRow({
           <button className="btn btn-sm" onClick={() => void toggleStudents()}>
             {showStudents ? "Hide" : "Students"}
           </button>
-          <button className="btn btn-sm" onClick={() => setShowEmails((s) => !s)}>
-            {showEmails ? "Hide" : "Emails"}
-          </button>
           <button
             className="btn btn-sm"
             disabled={!dirty}
-            onClick={() => void onSave({ ...d, extraEmails: parsed })}
+            onClick={() => void onSave({ ...d, extraEmails: keptEmails })}
           >
             {dirty ? "Save" : "Saved"}
           </button>
@@ -467,20 +464,6 @@ function BatchRow({
         </div>
       ) : null}
 
-      {showEmails ? (
-        <label className="mt-3 block">
-          <span className="label-xs">Extra addresses copied on notices — one per line</span>
-          <textarea
-            className="input mt-1 min-h-[90px] resize-y font-mono text-[12px]"
-            value={emailText}
-            onChange={(e) => setEmailText(e.target.value)}
-            placeholder={"student@newtonschool.co\ncoordinator@newtonschool.co"}
-          />
-          <span className="mt-1 block text-[12px] text-muted">
-            Students who sign in are emailed automatically — you only need this list for people who have not.
-          </span>
-        </label>
-      ) : null}
     </div>
   );
 }
