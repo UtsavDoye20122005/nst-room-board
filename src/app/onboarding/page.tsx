@@ -93,8 +93,9 @@ export default function OnboardingPage() {
 
   return (
     <main className="mx-auto max-w-[640px] px-5 py-10">
-      <div className="label-xs">{editing ? "Your profile" : "Welcome"}</div>
-      <h1 className="mt-2 text-2xl font-semibold">
+      <span className="brand-mark">NST</span>
+      <div className="label-xs mt-5">{editing ? "Your profile" : "Welcome"}</div>
+      <h1 className="mt-2 text-2xl font-semibold tracking-tight">
         {editing ? "Profile" : "Tell the board who you are"}
       </h1>
       <p className="mt-2 text-[14px] text-ink-2">

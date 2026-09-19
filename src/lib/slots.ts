@@ -94,3 +94,13 @@ export function currentSlotIndex(now = new Date()): number {
   }
   return -1;
 }
+
+/** Slot to scroll to: current hour, else first if the day hasn't started, else last. */
+export function nearestSlotIndex(now = new Date()): number {
+  const cur = currentSlotIndex(now);
+  if (cur >= 0) return cur;
+  const mins = now.getHours() * 60 + now.getMinutes();
+  const [fh, fm] = SLOTS[0].start.split(":").map(Number);
+  if (mins < fh * 60 + fm) return FIRST_SLOT;
+  return LAST_SLOT;
+}

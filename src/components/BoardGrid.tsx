@@ -10,7 +10,8 @@
 //          free again, so a teacher can still book over it.
 // ============================================================
 
-import { SLOTS, currentSlotIndex } from "@/lib/slots";
+import { useEffect, useRef } from "react";
+import { SLOTS, currentSlotIndex, nearestSlotIndex } from "@/lib/slots";
 import { todayISO } from "@/lib/dates";
 import { useCampus } from "@/lib/campusContext";
 import { withHonorific } from "@/lib/people";
@@ -25,6 +26,9 @@ export interface BoardGridProps {
   filterBatchId?: string;
   onBookSlot: (room: Room, slot: number) => void;
   onOpenSession: (booking: Booking) => void;
+  density?: "comfortable" | "compact";
+  /** Increment to scroll the current (or first) hour into view. */
+  focusNonce?: number;
 }
 
 /** One column's worth of cells - one box per half-hour row, always,
@@ -66,31 +70,52 @@ export function BoardGrid({
   canBook,
   highlightBatchId,
   filterBatchId,
+  density = "comfortable",
+  focusNonce = 0,
   onBookSlot,
   onOpenSession,
 }: BoardGridProps) {
   const { rooms, occupant, anyAt, batchNames } = useCampus();
   const nowSlot = date === todayISO() ? currentSlotIndex() : -1;
   const activeRooms = rooms.filter((r) => r.active);
+  const wrapRef = useRef<HTMLDivElement>(null);
 
   // One merged column per room, built once per render rather than once
   // per row - a multi-hour booking only needs to be looked up once.
   const columns = new Map(activeRooms.map((r) => [r.id, buildColumn(r.id, date, occupant, anyAt)]));
 
+  useEffect(() => {
+    if (!focusNonce) return;
+    const slot = date === todayISO() ? nearestSlotIndex() : 0;
+    const row = wrapRef.current?.querySelector<HTMLElement>('[data-slot="' + slot + '"]');
+    if (!row) return;
+    row.scrollIntoView({ block: "center", behavior: "smooth" });
+    row.classList.add("slot-flash");
+    const t = window.setTimeout(() => row.classList.remove("slot-flash"), 1200);
+    return () => window.clearTimeout(t);
+  }, [focusNonce, date]);
+
   if (activeRooms.length === 0) {
     return (
-      <div className="rounded-lg border border-dashed border-line-strong p-10 text-center text-[13.5px] text-muted">
-        No rooms yet. An admin needs to add them under Admin → Rooms, or run <code className="font-mono">npm run seed</code>.
+      <div className="empty">
+        <div className="empty-mark" aria-hidden><span /><span /><span /></div>
+        <p className="mt-4 text-[13.5px] text-muted">
+          No rooms yet. An admin needs to add them under Admin → Rooms, or run <code className="font-mono">npm run seed</code>.
+        </p>
       </div>
     );
   }
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-line bg-surface shadow-[var(--shadow)]">
-      <table className="w-full min-w-[900px] border-collapse">
+    <div
+      ref={wrapRef}
+      data-density={density}
+      className="board-wrap overflow-x-auto rounded-[var(--radius)] border border-line bg-surface shadow-[var(--shadow)]"
+    >
+      <table className="board-table w-full min-w-[900px] border-collapse">
         <thead>
           <tr>
-            <th className="w-[104px] border-b border-r border-line bg-surface-2 p-3 text-left align-top">
+            <th className="sticky-time w-[104px] border-b border-r border-line bg-surface-2 p-3 text-left align-top">
               <span className="label-xs">Time</span>
             </th>
             {activeRooms.map((r) => (
@@ -111,10 +136,14 @@ export function BoardGrid({
         </thead>
         <tbody>
           {SLOTS.map((slot) => (
-            <tr key={slot.index} className={slot.isBreak ? "bg-surface-3" : undefined}>
+            <tr
+              key={slot.index}
+              data-slot={slot.index}
+              className={slot.isBreak ? "bg-surface-3" : nowSlot === slot.index ? "bg-accent-soft" : undefined}
+            >
               <td
                 className={
-                  "border-b border-r border-line bg-surface-2 p-3 align-top whitespace-nowrap " +
+                  "sticky-time border-b border-r border-line bg-surface-2 p-3 align-top whitespace-nowrap " +
                   (nowSlot === slot.index ? "shadow-[inset_3px_0_0_var(--accent)]" : "")
                 }
               >
@@ -122,7 +151,9 @@ export function BoardGrid({
                 <div className="font-mono text-[10.5px] text-muted tnum">{slot.end}</div>
                 {slot.isBreak ? <div className="label-xs mt-1">Lunch</div> : null}
                 {nowSlot === slot.index ? (
-                  <div className="label-xs mt-1 !text-accent">Now</div>
+                  <div className="label-xs mt-1 inline-flex items-center gap-1.5 !text-accent">
+                    <span className="now-dot" /> Now
+                  </div>
                 ) : null}
               </td>
 
@@ -184,7 +215,7 @@ function Cell({
   onOpenSession: (b: Booking) => void;
 }) {
   const base =
-    "flex min-h-[70px] w-full flex-col gap-1 rounded border p-2 text-left transition-colors";
+    "cell-hit flex min-h-[74px] w-full flex-col gap-1 rounded-lg border p-2 text-left";
 
   // ---------- taken: red (one box per half-hour row, same size as a free/book box) ----------
   if (taken) {
@@ -294,7 +325,7 @@ function Cell({
   if (!canBook) {
     return (
       <div
-        className={base + " border-dashed border-free-line/70 bg-transparent"}
+        className={base + " border-dashed border-free-line bg-transparent"}
         aria-label="Free"
       >
         <span className="font-mono text-[10.5px] uppercase tracking-[.06em] text-muted">

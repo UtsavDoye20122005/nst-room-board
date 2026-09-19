@@ -118,7 +118,7 @@ export function SessionSheet({ booking, onClose }: { booking: Booking; onClose: 
           </>
         }
       >
-        {err ? <div className="mb-4 rounded border border-busy-line bg-busy-soft px-3 py-2 text-[13px]">{err}</div> : null}
+        {err ? <div className="mb-4 rounded-lg border border-busy-line bg-busy-soft px-3 py-2 text-[13px]">{err}</div> : null}
 
         <label className="block">
           <span className="label-xs">Move to</span>
@@ -197,7 +197,7 @@ export function SessionSheet({ booking, onClose }: { booking: Booking; onClose: 
           </>
         }
       >
-        {err ? <div className="mb-4 rounded border border-busy-line bg-busy-soft px-3 py-2 text-[13px]">{err}</div> : null}
+        {err ? <div className="mb-4 rounded-lg border border-busy-line bg-busy-soft px-3 py-2 text-[13px]">{err}</div> : null}
 
         {isSeries ? (
           <div className="mb-4 space-y-2">
@@ -346,17 +346,17 @@ export function SessionSheet({ booking, onClose }: { booking: Booking; onClose: 
         </>
       }
     >
-      {err ? <div className="mb-4 rounded border border-busy-line bg-busy-soft px-3 py-2 text-[13px]">{err}</div> : null}
+      {err ? <div className="mb-4 rounded-lg border border-busy-line bg-busy-soft px-3 py-2 text-[13px]">{err}</div> : null}
 
       {cancelled ? (
-        <div className="mb-4 rounded border border-off-line bg-off-soft px-3 py-2.5 text-[13px]">
+        <div className="mb-4 rounded-lg border border-off-line bg-off-soft px-3 py-2.5 text-[13px]">
           <strong className="font-semibold">This session is cancelled.</strong>
           {booking.cancelReason ? " " + booking.cancelReason : ""} The room is free for anyone to book.
         </div>
       ) : null}
 
       {awaitingApproval && !cancelled ? (
-        <div className="mb-4 rounded border border-moved-line bg-moved-soft px-3 py-2.5 text-[13px]">
+        <div className="mb-4 rounded-lg border border-moved-line bg-moved-soft px-3 py-2.5 text-[13px]">
           <strong className="font-semibold">Awaiting admin approval.</strong>{" "}
           {roomName(booking.roomId)} is held for these hours so nobody else can take it, but the session
           isn&apos;t confirmed yet.
@@ -367,13 +367,13 @@ export function SessionSheet({ booking, onClose }: { booking: Booking; onClose: 
       ) : null}
 
       {booking.movedFrom && !cancelled ? (
-        <div className="mb-4 rounded border border-moved-line bg-moved-soft px-3 py-2.5 text-[13px]">
+        <div className="mb-4 rounded-lg border border-moved-line bg-moved-soft px-3 py-2.5 text-[13px]">
           <strong className="font-semibold">Room changed.</strong> Moved here from {roomName(booking.movedFrom)}.
         </div>
       ) : null}
 
       {booking.seriesId ? (
-        <div className="mb-4 flex items-center gap-2 rounded border border-line bg-surface-2 px-3 py-2 text-[12.5px] text-ink-2">
+        <div className="mb-4 flex items-center gap-2 rounded-lg border border-line bg-surface-2 px-3 py-2 text-[12.5px] text-ink-2">
           <span className="pill">Weekly series</span>
           Every {weekdayName(booking.date)}
           {booking.seriesUntil ? " until " + shortDate(booking.seriesUntil) : ""}

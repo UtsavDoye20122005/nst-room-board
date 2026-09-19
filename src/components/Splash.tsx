@@ -7,8 +7,12 @@ export function Splash({ kind, message }: { kind: "loading" | "unconfigured" | "
     return (
       <main className="grid min-h-screen place-items-center p-6">
         <div className="text-center">
-          <div className="label-xs">NST Room Board</div>
+          <span className="brand-mark">NST</span>
+          <div className="label-xs mt-4">NST Room Board</div>
           <p className="mt-2 text-muted">Loading the board…</p>
+          <div className="mx-auto mt-5 h-1.5 w-36 overflow-hidden rounded-full bg-surface-3">
+            <div className="skel h-full w-full rounded-full" />
+          </div>
         </div>
       </main>
     );
@@ -17,8 +21,9 @@ export function Splash({ kind, message }: { kind: "loading" | "unconfigured" | "
   if (kind === "unconfigured") {
     return (
       <main className="mx-auto max-w-2xl p-6 md:p-10">
-        <div className="label-xs">Setup needed</div>
-        <h1 className="mt-2 text-2xl font-semibold">Firebase is not connected yet</h1>
+        <span className="brand-mark">NST</span>
+        <div className="label-xs mt-5">Setup needed</div>
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight">Firebase is not connected yet</h1>
         <p className="mt-3 max-w-prose text-ink-2">
           The app is running, but it has no database to talk to. Create a Firebase project, then copy
           <code className="mx-1 rounded bg-surface-3 px-1.5 py-0.5 font-mono text-[13px]">.env.local.example</code>
@@ -46,7 +51,7 @@ export function Splash({ kind, message }: { kind: "loading" | "unconfigured" | "
   return (
     <main className="mx-auto max-w-2xl p-6 md:p-10">
       <div className="label-xs text-busy">Problem</div>
-      <h1 className="mt-2 text-2xl font-semibold">Something went wrong</h1>
+      <h1 className="mt-2 text-2xl font-semibold tracking-tight">Something went wrong</h1>
       <p className="mt-3 text-ink-2">{message || "Unknown error."}</p>
       <Link href="/" className="btn mt-6">Back to the board</Link>
     </main>

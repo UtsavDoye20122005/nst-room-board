@@ -70,7 +70,7 @@ function CalendarBody() {
         </div>
         <div>
           <div className="label-xs">Month</div>
-          <div className="text-[19px] font-semibold tracking-tight">
+          <div className="text-[20px] font-semibold tracking-tight">
             {MONTH_LONG[cursor.m]} {cursor.y}
           </div>
         </div>
@@ -89,7 +89,7 @@ function CalendarBody() {
         </div>
       </div>
 
-      <div className="grid grid-cols-7 gap-px overflow-hidden rounded-lg border border-line bg-line">
+      <div className="grid grid-cols-7 gap-px overflow-hidden rounded-[var(--radius)] border border-line bg-line shadow-[var(--shadow)]">
         {DOW_SHORT.map((d) => (
           <div key={d} className="label-xs bg-surface-2 px-2.5 py-2">{d}</div>
         ))}
@@ -109,14 +109,15 @@ function CalendarBody() {
               key={c.iso}
               onClick={() => router.push("/board?date=" + c.iso)}
               className={
-                "flex min-h-[108px] flex-col gap-1 bg-surface p-2 text-left hover:bg-surface-2 " +
-                (c.inMonth ? "" : "bg-surface-2 opacity-50")
+                "flex min-h-[108px] flex-col gap-1 bg-surface p-2 text-left transition hover:bg-surface-2 " +
+                (c.inMonth ? "" : "bg-surface-2 opacity-50") +
+                (isToday ? " ring-1 ring-inset ring-accent" : "")
               }
             >
               <span
                 className={
                   "self-start font-mono text-[12.5px] font-semibold tnum " +
-                  (isToday ? "rounded bg-accent px-1.5 text-accent-ink" : "")
+                  (isToday ? "rounded-md bg-accent px-1.5 text-accent-ink" : "")
                 }
               >
                 {fromISO(c.iso).getDate()}
@@ -126,7 +127,7 @@ function CalendarBody() {
                 <span
                   key={b.id}
                   className={
-                    "truncate rounded-[3px] border-l-2 px-1.5 py-0.5 text-[10.5px] leading-tight " +
+                    "truncate rounded-md border-l-2 px-1.5 py-0.5 text-[10.5px] leading-tight " +
                     (b.status === "cancelled"
                       ? "border-off bg-off-soft line-through"
                       : b.kind === "exam"

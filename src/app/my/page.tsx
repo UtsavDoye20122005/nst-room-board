@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { SessionSheet } from "@/components/SessionSheet";
+import { EmptyState, PageHeader } from "@/components/PageHeader";
 import { useAuth } from "@/lib/authContext";
 import { useCampus } from "@/lib/campusContext";
 import { subscribeMyBookings } from "@/lib/db";
@@ -50,50 +51,49 @@ function MyBody() {
 
   return (
     <>
-      <div className="card mb-5 p-5">
-        <h1 className="text-[17px] font-semibold">{isFaculty ? "My bookings" : "My schedule"}</h1>
-        <p className="mt-1.5 max-w-prose text-[13px] text-muted">
-          {isFaculty ? (
-            <>
-              Everything booked under your name. Change a room or cancel a session and every teacher and
-              student sees it within a second — and the affected batches can be emailed automatically.
-            </>
-          ) : (
-            <>
-              Every class, lab and exam on the board for{" "}
-              <strong className="font-semibold text-ink">
-                {profile?.batchId ? campus.batchById(profile.batchId)?.name || "your batch" : "your batch"}
-              </strong>
-              . Cancelled sessions stay listed in grey so you know not to turn up.
-            </>
-          )}
-        </p>
-        <label className="mt-3.5 flex cursor-pointer items-center gap-2 text-[13px]">
-          <input
-            type="checkbox"
-            className="accent-[var(--accent)]"
-            checked={showPast}
-            onChange={(e) => setShowPast(e.target.checked)}
-          />
-          Show past sessions instead
-        </label>
-      </div>
+      <PageHeader title={isFaculty ? "My bookings" : "My schedule"} kicker={isFaculty ? "Faculty" : "Student"}>
+        {isFaculty ? (
+          <>
+            Everything booked under your name. Change a room or cancel a session and every teacher and
+            student sees it within a second — and the affected batches can be emailed automatically.
+          </>
+        ) : (
+          <>
+            Every class, lab and exam on the board for{" "}
+            <strong className="font-semibold text-ink">
+              {profile?.batchId ? campus.batchById(profile.batchId)?.name || "your batch" : "your batch"}
+            </strong>
+            . Cancelled sessions stay listed in grey so you know not to turn up.
+          </>
+        )}
+      </PageHeader>
+      <label className="mb-5 flex cursor-pointer items-center gap-2 text-[13px]">
+        <input
+          type="checkbox"
+          className="accent-[var(--accent)]"
+          checked={showPast}
+          onChange={(e) => setShowPast(e.target.checked)}
+        />
+        Show past sessions instead
+      </label>
 
       {list.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-line-strong p-10 text-center text-[13.5px] text-muted">
+        <EmptyState>
           {isFaculty
             ? "You have not booked anything yet. Open the day board and click a free hour."
             : "Nothing on the board for your batch yet."}
-        </div>
+        </EmptyState>
       ) : (
-        <div className="overflow-hidden rounded-lg border border-line bg-surface">
+        <div className="overflow-hidden rounded-[var(--radius)] border border-line bg-surface shadow-[var(--shadow)]">
           {list.map((b) => {
             const rel = relativeDay(b.date);
             const cancelled = b.status === "cancelled";
             return (
-              <div
+              <button
                 key={b.id}
-                className="grid grid-cols-1 items-center gap-3.5 border-b border-line px-4 py-3 last:border-b-0 hover:bg-surface-2 sm:grid-cols-[104px_92px_1fr_auto]"
+                type="button"
+                onClick={() => setOpen(b)}
+                className="grid w-full grid-cols-1 items-center gap-3.5 border-b border-line px-4 py-3 text-left last:border-b-0 hover:bg-surface-2 sm:grid-cols-[104px_92px_1fr_auto]"
               >
                 <div className="font-mono text-[12px] text-ink-2 tnum">
                   <div>{rel || shortDate(b.date)}</div>
@@ -128,9 +128,9 @@ function MyBody() {
                   >
                     {cancelled ? "Cancelled" : b.movedFrom ? "Moved" : "On"}
                   </span>
-                  <button className="btn btn-sm" onClick={() => setOpen(b)}>Open</button>
+                  <span className="btn btn-sm pointer-events-none">Open</span>
                 </div>
-              </div>
+              </button>
             );
           })}
         </div>

@@ -31,7 +31,7 @@ function PendingApprovalsBadge() {
     <Link
       href="/admin"
       title={pending.length + " booking(s) waiting for your approval"}
-      className="rounded-full border border-pending-line bg-pending-soft px-2.5 py-1 text-[12px] font-semibold text-pending transition-colors hover:brightness-110"
+      className="rounded-full border border-pending-line bg-pending-soft px-2.5 py-1 text-[12px] font-semibold text-pending transition hover:brightness-110"
     >
       {pending.length} waiting
     </Link>
@@ -72,7 +72,7 @@ export function AppShell({
   if (requireAdmin && !isAdmin) {
     return (
       <Frame profile={profile} nav={navFor(isFaculty, isAdmin)} pathname={pathname} onSignOut={signOut}>
-        <div className="card p-6">
+        <div className="card card-pad">
           <div className="label-xs text-busy">Admin only</div>
           <h1 className="mt-2 text-xl font-semibold">You do not have admin access</h1>
           <p className="mt-2 max-w-prose text-ink-2">
@@ -86,7 +86,7 @@ export function AppShell({
   return (
     <Frame profile={profile} nav={navFor(isFaculty, isAdmin)} pathname={pathname} onSignOut={signOut}>
       {campus.error ? (
-        <div className="mb-5 rounded-lg border border-busy-line bg-busy-soft p-4 text-[13.5px]">
+        <div className="mb-5 rounded-[var(--radius)] border border-busy-line bg-busy-soft p-4 text-[13.5px]">
           <strong className="font-semibold">The board could not load everything.</strong>
           <p className="mt-1 text-ink-2">{campus.error}</p>
         </div>
@@ -128,20 +128,18 @@ function Frame({
   const isStudent = profile.role === "student";
 
   return (
-    <div className="min-h-screen">
-      <header className="sticky top-0 z-40 border-b border-line bg-surface">
-        <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-4 px-5 py-3">
-          <Link href="/board" className="mr-auto flex items-baseline gap-2.5">
-            <span className="rounded bg-accent px-2 py-1 font-mono text-[12px] font-semibold tracking-[.14em] text-accent-ink">
-              NST
-            </span>
+    <div className="min-h-screen pb-20 sm:pb-0">
+      <header className="glass sticky top-0 z-40 border-b border-line">
+        <div className="mx-auto flex max-w-[1400px] flex-wrap items-center gap-3 px-4 py-3 sm:px-5">
+          <Link href="/board" className="mr-auto flex items-center gap-2.5">
+            <span className="brand-mark">NST</span>
             <span>
-              <span className="block text-[17px] font-semibold leading-tight">Room Board</span>
-              <span className="text-xs text-muted">Classroom &amp; exam allocation</span>
+              <span className="block text-[16px] font-semibold leading-tight tracking-tight sm:text-[17px]">Room Board</span>
+              <span className="hidden text-xs text-muted sm:block">Classroom &amp; exam allocation</span>
             </span>
           </Link>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2">
             <span
               className={
                 "rounded-full border px-2 py-1 font-mono text-[10.5px] uppercase tracking-[.09em] " +
@@ -157,7 +155,7 @@ function Frame({
               <span className="pill">{batchById(profile.batchId)?.name || profile.batchId}</span>
             ) : null}
             {!isStudent && profile.subjects?.length ? (
-              <span className="pill">{profile.subjects.slice(0, 2).join(" · ")}</span>
+              <span className="pill hidden sm:inline-flex">{profile.subjects.slice(0, 2).join(" · ")}</span>
             ) : null}
             <PendingApprovalsBadge />
             <Link href="/onboarding" className="btn btn-sm">Profile</Link>
@@ -165,10 +163,10 @@ function Frame({
           </div>
         </div>
 
-        <nav className="mx-auto max-w-[1400px] overflow-x-auto px-5">
-          <ul className="flex gap-1">
+        <nav className="nav-scroller mx-auto max-w-[1400px] overflow-x-auto px-4 sm:px-5" aria-label="Primary">
+          <ul className="flex gap-1 pb-px">
             {nav.map((n) => {
-              const active = pathname === n.href;
+              const active = pathname === n.href || (n.href !== "/board" && pathname.startsWith(n.href));
               return (
                 <li key={n.href}>
                   <Link
@@ -193,7 +191,32 @@ function Frame({
         </nav>
       </header>
 
-      <main className="mx-auto max-w-[1400px] px-5 pb-20 pt-6">{children}</main>
+      <main className="page-enter mx-auto max-w-[1400px] px-4 pb-10 pt-6 sm:px-5 sm:pb-20">{children}</main>
+
+      <nav
+        className="glass fixed inset-x-0 bottom-0 z-40 border-t border-line sm:hidden"
+        aria-label="Quick"
+      >
+        <ul className="mx-auto grid max-w-[1400px] grid-flow-col auto-cols-fr gap-0 px-1 pb-[max(0.4rem,env(safe-area-inset-bottom))] pt-1">
+          {nav.slice(0, 5).map((n) => {
+            const active = pathname === n.href || (n.href !== "/board" && pathname.startsWith(n.href));
+            return (
+              <li key={n.href}>
+                <Link
+                  href={n.href}
+                  aria-current={active ? "page" : undefined}
+                  className={
+                    "flex min-h-[44px] items-center justify-center rounded-lg px-1 text-center text-[11px] font-medium leading-tight " +
+                    (active ? "bg-accent-soft text-accent" : "text-muted")
+                  }
+                >
+                  {n.label}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
     </div>
   );
 }

@@ -14,6 +14,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { Modal } from "@/components/Modal";
 import { useToast } from "@/components/Toast";
+import { SegTabs } from "@/components/PageHeader";
 import { useAuth } from "@/lib/authContext";
 import { useCampus } from "@/lib/campusContext";
 import { prettyDate, shiftDays, todayISO } from "@/lib/dates";
@@ -74,25 +75,13 @@ function ExamsBody() {
 
   return (
     <>
-      <div className="mb-5 flex items-center gap-1 border-b border-line">
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            aria-current={tab === t.id ? "page" : undefined}
-            className={
-              "border-b-2 px-3.5 pb-2.5 pt-1 text-[14px] font-medium transition-colors " +
-              (tab === t.id ? "border-accent text-ink" : "border-transparent text-muted hover:text-ink")
-            }
-          >
-            {t.label}
-          </button>
-        ))}
+      <div className="mb-5 flex flex-wrap items-center gap-3">
+        <SegTabs tabs={tabs} value={tab} onChange={setTab} />
         <a
           href={seatingLink()}
           target="_blank"
           rel="noopener noreferrer"
-          className="border-b-2 border-transparent px-3.5 pb-2.5 pt-1 text-[14px] font-medium text-muted transition-colors hover:text-ink"
+          className="btn btn-sm"
         >
           Seating chart ↗
         </a>

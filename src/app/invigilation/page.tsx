@@ -94,8 +94,8 @@ function Body() {
   if (!profile) return null;
   if (profile.role === "student") {
     return (
-      <div className="card p-6">
-        <h1 className="text-xl font-semibold">Invigilation is for teachers</h1>
+        <div className="card card-pad">
+          <h1 className="text-xl font-semibold tracking-tight">Invigilation is for teachers</h1>
         <p className="mt-2 text-ink-2">Your exam room is on the day board.</p>
       </div>
     );
@@ -104,7 +104,7 @@ function Body() {
   return (
     <div className="grid gap-5">
       <div>
-        <h1 className="text-2xl font-semibold">My invigilation</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">My invigilation</h1>
         <p className="mt-1 text-[13.5px] text-muted">
           You have done <strong className="text-ink">{doneCount}</strong>{" "}
           {doneCount === 1 ? "duty" : "duties"}.
@@ -112,7 +112,7 @@ function Body() {
       </div>
 
       {requests.length > 0 ? (
-        <div className="card border-accent-line p-4">
+        <div className="card card-pad border-accent-line">
           <div className="label-xs text-accent">Somebody wants to be with you</div>
           <ul className="mt-2 grid gap-2">
             {requests.map((asker) => (
@@ -125,8 +125,8 @@ function Body() {
       {next ? (
         <DutyCard key={next.id} duty={next} me={me} invigilators={invigilators} tally={tally} isNext />
       ) : (
-        <div className="card p-6">
-          <h2 className="text-lg font-semibold">No invigilation coming up</h2>
+        <div className="card card-pad">
+          <h2 className="text-lg font-semibold tracking-tight">No invigilation coming up</h2>
           <p className="mt-2 text-[13.5px] text-ink-2">
             When the exam office draws the duties for the next exam, it will show up here, and you will see the room and
             the time.
@@ -139,7 +139,7 @@ function Body() {
       ))}
 
       {past.length > 0 ? (
-        <div className="card p-4">
+        <div className="card card-pad">
           <div className="label-xs">Earlier</div>
           <ul className="mt-2 grid gap-1.5 text-[13.5px]">
             {past.map((d) => (
@@ -304,7 +304,7 @@ function DutyCard({
   }
 
   return (
-    <div className={"card p-5 " + (isNext ? "border-accent-line" : "")}>
+    <div className={"card card-pad " + (isNext ? "border-accent-line ring-1 ring-accent" : "")}>
       <div className="flex flex-wrap items-start gap-3">
         <div className="mr-auto">
           {isNext ? <div className="label-xs text-accent">Next duty</div> : null}

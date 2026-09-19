@@ -30,6 +30,7 @@ import { slotRange } from "@/lib/slots";
 import { withHonorific } from "@/lib/people";
 import { YEARS, yearLabel } from "@/lib/seedData";
 import { useToast } from "@/components/Toast";
+import { SegTabs } from "@/components/PageHeader";
 import { Modal } from "@/components/Modal";
 import type { Batch, Role, Room, RosterEntry, UserProfile } from "@/lib/types";
 
@@ -55,26 +56,8 @@ function AdminBody() {
 
   return (
     <>
-      <div className="mb-5 flex items-center gap-1 border-b border-line">
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            onClick={() => setTab(t.id)}
-            aria-current={tab === t.id ? "page" : undefined}
-            className={
-              "flex items-center gap-1.5 border-b-2 px-3.5 pb-2.5 pt-1 text-[14px] font-medium transition-colors " +
-              (tab === t.id ? "border-accent text-ink" : "border-transparent text-muted hover:text-ink")
-            }
-          >
-            {t.label}
-            {t.id === "approvals" && pending.length > 0 ? (
-              <span className="rounded-full bg-pending px-1.5 py-px text-[11px] font-semibold leading-tight text-paper">
-                {pending.length}
-              </span>
-            ) : null}
-          </button>
-        ))}
-
+      <div className="mb-5">
+        <SegTabs tabs={tabs.map((t) => ({ ...t, badge: t.id === "approvals" ? pending.length : undefined }))} value={tab} onChange={setTab} />
       </div>
 
       {tab === "rooms" ? <RoomsPanel /> : null}
@@ -103,7 +86,7 @@ function RoomsPanel() {
 
   return (
     <>
-      <div className="card mb-4 p-5">
+      <div className="card card-pad mb-4">
         <h2 className="text-[15px] font-semibold">Rooms and capacities</h2>
         <button
           className="btn btn-primary mt-3.5"
@@ -122,7 +105,7 @@ function RoomsPanel() {
         </button>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-line bg-surface">
+      <div className="overflow-hidden rounded-[var(--radius)] border border-line bg-surface shadow-[var(--shadow)]">
         {rooms.map((r) => (
           <RoomRow
             key={r.id}
@@ -272,7 +255,7 @@ function BatchesPanel() {
 
   return (
     <>
-      <div className="card mb-4 p-5">
+      <div className="card card-pad mb-4">
         <h2 className="text-[15px] font-semibold">Batches</h2>
         <button
           className="btn btn-primary mt-3.5"
@@ -282,7 +265,7 @@ function BatchesPanel() {
         </button>
       </div>
 
-      <div className="overflow-hidden rounded-lg border border-line bg-surface">
+      <div className="overflow-hidden rounded-[var(--radius)] border border-line bg-surface shadow-[var(--shadow)]">
         {batches.map((b) => (
           <BatchRow
             key={b.id}
@@ -518,7 +501,7 @@ function ApprovalsPanel() {
 
   return (
     <>
-      <div className="card mb-4 p-5">
+      <div className="card card-pad mb-4">
         <h2 className="text-[15px] font-semibold">Waiting for approval</h2>
         <p className="mt-1.5 text-[13px] text-muted">
           Rooms below are already held for these hours, so nobody can take them while you decide.
@@ -597,7 +580,7 @@ function PeoplePanel() {
 
   return (
     <>
-      <div className="card mb-4 p-5">
+      <div className="card card-pad mb-4">
         <h2 className="text-[15px] font-semibold">People</h2>
         <input
           className="input mt-3.5 max-w-[320px]"
@@ -631,7 +614,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   return (
     <div className="mb-5">
       <h3 className="label-xs mb-2">{title}</h3>
-      <div className="overflow-hidden rounded-lg border border-line bg-surface">{children}</div>
+      <div className="overflow-hidden rounded-[var(--radius)] border border-line bg-surface shadow-[var(--shadow)]">{children}</div>
     </div>
   );
 }

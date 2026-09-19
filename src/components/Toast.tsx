@@ -19,17 +19,17 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <Ctx.Provider value={{ push }}>
       {children}
-      <div className="pointer-events-none fixed inset-x-0 bottom-6 z-[200] flex flex-col items-center gap-2 px-4">
+      <div className="pointer-events-none fixed inset-x-0 bottom-24 z-[200] flex flex-col items-center gap-2 px-4 md:bottom-6">
         {items.map((t) => (
           <div
             key={t.id}
             role="status"
             className={
-              "pointer-events-auto max-w-[min(92vw,560px)] rounded-lg px-4 py-2.5 text-[13.5px] shadow-lg " +
+              "toast-item pointer-events-auto max-w-[min(92vw,560px)] rounded-xl px-4 py-2.5 text-[13.5px] shadow-lg " +
               (t.tone === "bad"
                 ? "bg-busy text-white"
                 : t.tone === "info"
-                  ? "bg-surface-3 text-ink border border-line-strong"
+                  ? "border border-line-strong bg-surface text-ink"
                   : "bg-ink text-paper")
             }
           >

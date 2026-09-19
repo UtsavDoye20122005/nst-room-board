@@ -26,7 +26,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap"
         />
       </head>
-      <body className="font-sans text-[15px] leading-normal">
+      <body className="font-sans text-[15px] leading-relaxed antialiased">
         <Providers>{children}</Providers>
       </body>
     </html>

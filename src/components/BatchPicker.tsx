@@ -67,7 +67,7 @@ export function BatchPicker({
         const someOn = ids.some((id) => batchIds.includes(id));
 
         return (
-          <div key={y} className="rounded-lg border border-line bg-surface-2 p-3">
+          <div key={y} className="rounded-xl border border-line bg-surface-2 p-3">
             <div className="flex items-center justify-between gap-3">
               <label className="flex cursor-pointer items-center gap-2 text-[13.5px] font-semibold">
                 <input

@@ -57,7 +57,7 @@ function CapacityNote({
   return (
     <div
       className={
-        "rounded border px-3 py-2 text-[13px] " +
+        "rounded-lg border px-3 py-2 text-[13px] " +
         (overCapacity ? "border-busy-line bg-busy-soft" : "border-free-line bg-free-soft")
       }
     >
@@ -272,7 +272,7 @@ export function BookingModal({
       }
     >
       {err ? (
-        <div className="mb-4 rounded border border-busy-line bg-busy-soft px-3 py-2 text-[13px]">{err}</div>
+        <div className="mb-4 rounded-lg border border-busy-line bg-busy-soft px-3 py-2 text-[13px]">{err}</div>
       ) : null}
 
       <div className="grid gap-4 sm:grid-cols-2">

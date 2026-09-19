@@ -95,12 +95,27 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="grid min-h-screen place-items-center px-5 py-10">
-      <div className="w-full max-w-[420px]">
-        <div className="mb-7 flex items-baseline gap-2.5">
-          <span className="rounded bg-accent px-2 py-1 font-mono text-[12px] font-semibold tracking-[.14em] text-accent-ink">
-            NST
+    <main className="grid min-h-screen lg:grid-cols-[1.05fr_.95fr]">
+      <aside className="relative hidden overflow-hidden border-r border-line bg-surface p-10 lg:flex lg:flex-col lg:justify-center">
+        <div className="pointer-events-none absolute -right-24 -top-24 h-72 w-72 rounded-full bg-accent-soft" />
+        <div className="pointer-events-none absolute -bottom-16 left-10 h-56 w-56 rounded-full bg-free-soft" />
+        <div className="relative mb-10 flex items-center gap-2.5">
+          <span className="brand-mark">NST</span>
+          <span>
+            <span className="block text-[19px] font-semibold leading-tight">Room Board</span>
+            <span className="text-xs text-muted">Classroom &amp; exam allocation</span>
           </span>
+        </div>
+        <div className="relative max-w-md">
+          <p className="label-xs">Campus wayfinding</p>
+          <h1 className="mt-2 text-4xl font-semibold tracking-tight">See every room at a glance.</h1>
+        </div>
+      </aside>
+
+      <div className="grid place-items-center px-5 py-10">
+      <div className="w-full max-w-[420px]">
+        <div className="mb-7 flex items-center gap-2.5 lg:hidden">
+          <span className="brand-mark">NST</span>
           <span>
             <span className="block text-[19px] font-semibold leading-tight">Room Board</span>
             <span className="text-xs text-muted">Classroom &amp; exam allocation</span>
@@ -108,28 +123,22 @@ export default function LoginPage() {
         </div>
 
         <div className="card p-6">
-          <h1 className="text-xl font-semibold">Sign in</h1>
+          <h1 className="text-xl font-semibold tracking-tight">Sign in</h1>
           <p className="mt-1.5 text-[13.5px] text-muted">
             Use whichever way you were given — an ID and password, or your Google/email account.
           </p>
 
-          <div className="mt-4 flex gap-1 rounded-lg border border-line bg-surface-2 p-1">
+          <div className="seg mt-4">
             <button
               type="button"
-              className={
-                "flex-1 rounded-md py-1.5 text-[13px] font-medium transition-colors " +
-                (tab === "email" ? "bg-surface shadow-sm" : "text-muted hover:text-ink")
-              }
+              className={"seg-item flex-1 " + (tab === "email" ? "seg-item-on" : "")}
               onClick={() => switchTab("email")}
             >
               Email / Google
             </button>
             <button
               type="button"
-              className={
-                "flex-1 rounded-md py-1.5 text-[13px] font-medium transition-colors " +
-                (tab === "id" ? "bg-surface shadow-sm" : "text-muted hover:text-ink")
-              }
+              className={"seg-item flex-1 " + (tab === "id" ? "seg-item-on" : "")}
               onClick={() => switchTab("id")}
             >
               Username &amp; password
@@ -277,6 +286,7 @@ export default function LoginPage() {
             </form>
           )}
         </div>
+      </div>
       </div>
     </main>
   );

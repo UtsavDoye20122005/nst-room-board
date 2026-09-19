@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { AppShell } from "@/components/AppShell";
+import { EmptyState, PageHeader } from "@/components/PageHeader";
 import { useAuth } from "@/lib/authContext";
 import { useCampus } from "@/lib/campusContext";
 import { clockTime, shortDate, toISO } from "@/lib/dates";
@@ -38,19 +39,14 @@ function NoticesBody() {
 
   return (
     <>
-      <div className="card mb-5 p-5">
-        <h1 className="text-[17px] font-semibold">Notices</h1>
-        <p className="mt-1.5 max-w-prose text-[13px] text-muted">
-          {isStudent
-            ? "Every room change and cancellation that affects your batch, newest first. Worth a glance before you walk to a classroom."
-            : "Every booking, room change and cancellation across the campus. Students only ever see the ones for their own batch."}
-        </p>
-      </div>
+      <PageHeader title="Notices" kicker="Campus">
+        {isStudent
+          ? "Every room change and cancellation that affects your batch, newest first. Worth a glance before you walk to a classroom."
+          : "Every booking, room change and cancellation across the campus. Students only ever see the ones for their own batch."}
+      </PageHeader>
 
       {list.length === 0 ? (
-        <div className="rounded-lg border border-dashed border-line-strong p-10 text-center text-[13.5px] text-muted">
-          Nothing yet.
-        </div>
+        <EmptyState>Nothing yet.</EmptyState>
       ) : (
         <div className="space-y-2">
           {list.map((n) => {
@@ -62,7 +58,7 @@ function NoticesBody() {
                   <div className="text-muted">{clockTime(n.createdAt)}</div>
                 </div>
                 <div>
-                  <div className={"flex items-start gap-3 rounded-lg border px-3.5 py-2.5 text-[13.5px] " + t.cls}>
+                  <div className={"flex items-start gap-3 rounded-[var(--radius)] border px-3.5 py-2.5 text-[13.5px] " + t.cls}>
                     <span
                       className={
                         "mt-px shrink-0 rounded px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-[.09em] " + t.chip
