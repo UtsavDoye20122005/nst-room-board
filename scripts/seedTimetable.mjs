@@ -1,40 +1,40 @@
 #!/usr/bin/env node
 // ============================================================
-//  npm run seed-timetable
+//  SUPERSEDED — do not run this.
 //
-//  Turns the real weekly timetable (2nd Year, 3rd Sem, Batch 1 /
-//  Batch 2) into real recurring bookings, so the board and every
-//  student's "my classes" page show it without a teacher having
-//  to book each session by hand.
+//  The timetable is no longer typed out in code. It is read
+//  straight from the two Google Sheets, every few minutes, by
+//  src/lib/timetable. Editing a sheet is now the ONLY way to
+//  change the timetable, and the change reaches the board on its
+//  own - see README, "Timetable".
 //
-//  "Concept Room" on the timetable is its own real room now - id
-//  "concept" in campusSeed.json, also called the Pizza Room. (Not the
-//  same as C-5, despite C-5's own "Pizza Classroom" note - that's a
-//  separate, unrelated room.) Its seating capacity isn't confirmed
-//  yet, so it's seeded with a placeholder (60) - fix that for real
-//  under Admin -> Rooms once you know it, no re-run needed.
+//  Running this script would write a second, hand-copied copy of
+//  the timetable underneath the live one. The sync would spot the
+//  duplicates as rows the sheets do not ask for and delete them
+//  again, so the only thing it can achieve is churn. It refuses
+//  below rather than letting that happen.
 //
-//  Rebuilt in full from the actual per-batch weekly sheet (both
-//  batches shown as separate rows, exact times, exact rooms) instead
-//  of the older, partly-guessed version. Two things that version got
-//  wrong, now fixed everywhere they occurred: every morning
-//  lecture/lab used to run 30 minutes too long into the 12:00-12:30
-//  slot - the sheet shows that slot free every day, lunch is the
-//  block right after it - and Batch 1's whole Wednesday afternoon,
-//  previously skipped as unknown, turned out to be three sequential
-//  sessions back to back (AP Lab, HOLISTIC, ADA Lab).
-//
-//  A later correction from the official sheet swapped which physical
-//  room Batch 1 vs Batch 2 sit in for a few of these afternoon
-//  lab/lecture hours (Monday's HOLISTIC/ADA-Lab and ADA-Lab/AP-Lab
-//  pairs, Wednesday's first AP-Lab/ADA-Lab pair) - same subject stays
-//  with the same batch, only the room the two batches swap into
-//  changed. Reflected below; nothing else on those days moved.
-//
-//  Safe to run more than once: each session's hour is a deterministic
-//  slotLock document, so a re-run just skips weeks that already exist
-//  instead of doubling them up.
+//  Kept, rather than deleted, because the hand-transcribed entries
+//  further down are the record of what the timetable looked like
+//  before the sheets became the source of truth - and because the
+//  teacher-name mapping in it was carried across into
+//  src/lib/timetable/config.ts, which is where to edit it now.
 // ============================================================
+
+console.error(
+  "\n  This script is superseded and does nothing.\n\n" +
+  "  The timetable now comes from the two Google Sheets automatically.\n" +
+  "  To change it, edit the sheet. To see what the site makes of it:\n\n" +
+  "      npm run timetable-dry-run      # shows every change, writes nothing\n" +
+  "      npm run timetable-sync         # applies it now\n\n" +
+  "  Admin -> Timetable in the app does the same thing with a button.\n"
+);
+process.exit(1);
+
+/* ----------------------------------------------------------------
+   Everything below is the old hand-typed timetable, kept for
+   reference only. It no longer runs.
+   ---------------------------------------------------------------- */
 
 import { cert, initializeApp } from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";

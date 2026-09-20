@@ -12,6 +12,7 @@ import { NextUpStrip } from "@/components/NextUpStrip";
 import { FreeRoomFinder } from "@/components/FreeRoomFinder";
 import { useAuth } from "@/lib/authContext";
 import { useCampus } from "@/lib/campusContext";
+import { useTimetableSync } from "@/lib/timetable/useTimetableSync";
 import { shiftDays, todayISO } from "@/lib/dates";
 import { slotRange } from "@/lib/slots";
 import { YEARS, yearLabel } from "@/lib/seedData";
@@ -43,6 +44,13 @@ function BoardBody() {
   const [density, setDensity] = useState<Density>("comfortable");
 
   const isFaculty = profile?.role === "faculty" || profile?.role === "admin";
+
+  // Opening the board asks the server to re-check the two timetable
+  // Google Sheets. It is throttled server side, costs nothing when
+  // the sheets have not changed, and never blocks the page - the
+  // board is live on Firestore, so if the sync does write something
+  // this browser redraws on its own a second later.
+  useTimetableSync(Boolean(profile));
 
   useEffect(() => {
     try {

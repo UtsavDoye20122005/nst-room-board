@@ -10,6 +10,8 @@
     "lint": "next lint",
     "seed": "node scripts/seed.mjs",
     "seed-timetable": "node scripts/seedTimetable.mjs",
+    "timetable-dry-run": "node scripts/timetableDryRun.mjs",
+    "timetable-sync": "node scripts/timetableDryRun.mjs --write",
     "seed-roster": "node scripts/seedRoster.mjs",
     "seed-invigilators": "node scripts/seedInvigilators.mjs",
     "clear-invigilation": "node scripts/clearInvigilation.mjs",

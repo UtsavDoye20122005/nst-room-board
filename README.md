@@ -98,8 +98,9 @@ src/
     calendar/             month view
     my/                   my bookings (faculty) / my schedule (student)
     notices/              room changes and cancellations
-    admin/                rooms, batches, people
+    admin/                rooms, batches, people, timetable sync
     api/notify/           server route that sends the emails
+    api/timetable/sync/   re-reads the Google Sheets and updates the board
   components/
     BoardGrid.tsx         the rooms x hours table
     BookingModal.tsx      the booking form
@@ -109,7 +110,8 @@ src/
   lib/
     db.ts                 EVERY Firestore read and write, incl. the transaction
     types.ts              every data shape in one place
-    slots.ts              the teaching day - edit this to change the timetable
+    slots.ts              the teaching day (the half-hour grid the board draws)
+    timetable/            reads the timetable Google Sheets - see "Timetable"
     rooms/batches         seeded from src/data/campusSeed.json
     email.ts              the three email providers and the message templates
     authContext.tsx       sign-in and the current person's profile
@@ -146,9 +148,87 @@ file only matters the first time.
   addresses into Admin → Batches → Emails and they get copied on every notice.
 - **Gmail sending is capped** at roughly 500 recipients a day. Brevo's free
   tier is 300 a day. Either is plenty for a campus; neither is a mailing list.
-- **No recurring bookings yet.** A weekly class has to be booked per week.
-  This is the most useful next feature.
+- **Recurring bookings are timetable-only.** The weekly timetable repeats
+  because the sheet sync writes every week of it. A teacher's own one-off
+  booking is still made week by week.
 - **No seating plan** for exams — the board allocates rooms, not desks.
+
+---
+
+## Timetable
+
+**The timetable lives in two Google Sheets. The site follows them.**
+
+| Year | Sheet |
+|---|---|
+| 1st Year, 1st Sem | `1N5-MVGIZR2EruBgZ0DSY9ZpR3VhW3OYZ1OCtdXJX7rQ` |
+| 2nd Year, 3rd Sem | `1vcX7VPLyVBrXB1wL1MoNp6OW-5xXRP-Bmq7ndm5jpJw` |
+
+Edit a sheet and the change reaches the Day Board on its own, usually within
+ten minutes. Nothing to re-run, nothing to copy across, and no way for the
+board and the sheet to drift apart.
+
+**There is no API key and nothing to configure.** The sheets are read from
+their ordinary public export URL, which works because they are already shared
+as *Anyone with the link can view*. If a sheet is ever made private the sync
+says so instead of going quietly stale.
+
+### How it reads a sheet
+
+The obvious route — the CSV export — is useless here, because a timetable says
+how long a class runs by how far its merged cell stretches across the time
+columns. CSV throws every merge away, so each class arrives with a start time
+and no end. So the sync asks for `export?format=zip`, a zip of static HTML in
+which merges survive as `colspan` and `rowspan`, and lays the table out the way
+a browser would. That also means the *downward* merges are read properly: a
+lecture drawn as one tall cell across Batch A1 and A2 is understood as one
+lecture for all of Batch A, which is where the real student roster sits.
+
+### When it runs
+
+Opening the Day Board asks the server to re-check. That is throttled to once
+every ten minutes, and if the sheets have not changed it stops after the
+download without writing anything — so a busy morning costs no more than a
+quiet one. Admin → Timetable has a **Sync now** button that skips the wait, and
+shows what changed and anything on the sheets it could not place.
+
+From a terminal:
+
+```bash
+npm run timetable-dry-run     # shows every change it would make, writes nothing
+npm run timetable-sync        # applies it now
+```
+
+### What it owns, and what it will not touch
+
+Sessions written from a sheet carry a deterministic id (`tt_<date>_<room>_<slot>`)
+and `source: "sheet"`. The sync owns those completely — it corrects and removes
+them to match the sheet, so editing one in the app is pointless.
+
+A booking **a teacher made by hand** is never rewritten. If the timetable needs
+that exact room at that exact hour, the booking is *cancelled* rather than
+deleted: it keeps its place on the board with the reason on it, a notice goes
+out, and it can be reinstated elsewhere. Every such case is listed under
+Admin → Timetable so nobody finds out by accident.
+
+### Changing what the sheets cannot say
+
+The sheets carry no teacher names, so those live in
+`src/lib/timetable/config.ts` — along with the sheet ids, the room-name
+aliases, and the fallback room for a practical the sheet gives no room for.
+That file is the only one to edit when a name or a room changes.
+
+| To change | Edit |
+|---|---|
+| The timetable itself | the Google Sheet |
+| Which sheets are read | `SHEETS` in `src/lib/timetable/config.ts` |
+| Teacher names | `TEACHERS` in the same file |
+| Room name spellings the sheet uses | `ROOM_ALIASES` in the same file |
+| Room for a practical with no room on the sheet | `FALLBACK_ROOMS` in the same file |
+| How many weeks ahead to book | `HORIZON_WEEKS` in the same file |
+
+`scripts/seedTimetable.mjs`, which used to hold a hand-typed copy of the
+timetable, is superseded and refuses to run.
 
 ---
 

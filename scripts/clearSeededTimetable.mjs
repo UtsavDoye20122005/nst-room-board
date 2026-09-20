@@ -19,6 +19,13 @@
 //
 //  Does NOT touch anything a real teacher booked themselves - only
 //  the synthetic seed-* faculty ids this script itself writes.
+//
+//  MOSTLY OBSOLETE NOW. The timetable comes from the two Google
+//  Sheets, and that sync removes its own stale rows as a matter of
+//  course - including the seed-* leftovers this was written to
+//  clean up, which it adopted the first time it ran. Keeping this
+//  around only for a project whose database still predates the
+//  sync. It will very likely find nothing to delete.
 // ============================================================
 
 import { cert, initializeApp } from "firebase-admin/app";

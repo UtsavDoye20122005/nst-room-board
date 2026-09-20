@@ -107,6 +107,15 @@ export interface Booking {
    */
   seriesId?: string | null;
   seriesUntil?: string | null;
+  /**
+   * "sheet" means this session was written by the Google Sheet sync
+   * (src/lib/timetable) and is owned by it: the next sync will correct
+   * or remove it to match the sheet, so editing one here is pointless.
+   * Absent on anything a person booked, which the sync never rewrites.
+   */
+  source?: "sheet";
+  /** What the sheet said last time, so the sync can spot a real change. */
+  sheetFingerprint?: string;
   createdAt: number;
   updatedAt: number;
 }

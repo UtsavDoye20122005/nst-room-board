@@ -25,16 +25,18 @@ import {
   upsertRoom,
 } from "@/lib/db";
 import { usePendingApprovals } from "@/lib/usePendingApprovals";
-import { prettyDate } from "@/lib/dates";
+import { clockTime, prettyDate } from "@/lib/dates";
 import { slotRange } from "@/lib/slots";
 import { withHonorific } from "@/lib/people";
 import { YEARS, yearLabel } from "@/lib/seedData";
 import { useToast } from "@/components/Toast";
 import { SegTabs } from "@/components/PageHeader";
+import { useManualSync } from "@/lib/timetable/useTimetableSync";
+import { SHEETS } from "@/lib/timetable/config";
 import { Modal } from "@/components/Modal";
 import type { Batch, Role, Room, RosterEntry, UserProfile } from "@/lib/types";
 
-type Tab = "rooms" | "batches" | "people" | "approvals";
+type Tab = "rooms" | "batches" | "people" | "approvals" | "timetable";
 
 export default function AdminPage() {
   return (
@@ -52,6 +54,7 @@ function AdminBody() {
     { id: "batches", label: "Batches" },
     { id: "people", label: "People" },
     { id: "approvals", label: "Approvals" },
+    { id: "timetable", label: "Timetable" },
   ];
 
   return (
@@ -64,6 +67,7 @@ function AdminBody() {
       {tab === "batches" ? <BatchesPanel /> : null}
       {tab === "people" ? <PeoplePanel /> : null}
       {tab === "approvals" ? <ApprovalsPanel /> : null}
+      {tab === "timetable" ? <TimetablePanel /> : null}
     </>
   );
 }
@@ -608,6 +612,122 @@ function PeoplePanel() {
       </Section>
     </>
   );
+}
+
+
+// ============================================================
+//  Admin -> Timetable
+//
+//  The timetable is not edited here, and deliberately so: it is
+//  edited in the two Google Sheets, and this site follows them.
+//  What this panel is for is seeing that the following is
+//  actually working - when it last looked, what it changed, and
+//  anything on the sheets it could not place.
+// ============================================================
+
+function TimetablePanel() {
+  const { run, busy, report, error } = useManualSync();
+
+  return (
+    <>
+      <Section title="Where the timetable comes from">
+        <div className="border-b border-line px-4 py-4 last:border-b-0">
+          <p className="text-[13.5px] text-muted">
+            The board follows these two Google Sheets. Edit a sheet and the change reaches
+            the board on its own, usually within ten minutes — there is nothing to re-run
+            and nothing to copy across. Sessions that came from a sheet cannot be edited
+            here, because the next check would only put them back.
+          </p>
+          <ul className="mt-3 space-y-1.5">
+            {SHEETS.map((sheet) => (
+              <li key={sheet.id} className="text-[13px]">
+                <span className="font-semibold">{sheet.label}</span>{" "}
+                <a
+                  className="text-accent underline underline-offset-2"
+                  href={"https://docs.google.com/spreadsheets/d/" + sheet.id + "/edit"}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  open the sheet
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      </Section>
+
+      <Section title="Sync">
+        <div className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-4 last:border-b-0">
+          <button className="btn btn-primary" onClick={() => void run()} disabled={busy}>
+            {busy ? "Reading the sheets…" : "Sync now"}
+          </button>
+          <span className="text-[13px] text-muted">
+            {busy
+              ? "This can take a moment the first time."
+              : "Checks both sheets straight away, without waiting for the usual ten minutes."}
+          </span>
+        </div>
+
+        {error ? (
+          <div className="border-b border-line bg-busy-soft px-4 py-3 text-[13.5px] text-ink-2 last:border-b-0">
+            {error}
+          </div>
+        ) : null}
+
+        {report ? (
+          <div className="border-b border-line px-4 py-4 last:border-b-0">
+            <p className="text-[13.5px]">
+              <span className="font-semibold">{outcomeLabel(report.outcome)}</span>{" "}
+              <span className="text-muted">at {clockTime(report.checkedAt)}</span>
+            </p>
+            <p className="mt-1.5 text-[13px] text-muted">
+              {report.sessionsFound} sessions read from the sheets · {report.created} added ·{" "}
+              {report.updated} changed · {report.removed} removed · booked through{" "}
+              {prettyDate(report.to)}
+            </p>
+
+            {report.displaced.length ? (
+              <div className="mt-3">
+                <h4 className="label-xs mb-1.5">Cancelled to make room for the timetable</h4>
+                <ul className="space-y-1">
+                  {report.displaced.map((d) => (
+                    <li key={d} className="text-[12.5px] text-muted">{d}</li>
+                  ))}
+                </ul>
+                <p className="mt-1.5 text-[12.5px] text-muted">
+                  These were teachers&rsquo; own bookings in a room the sheet needs at that
+                  hour. They are cancelled rather than deleted, so each one still shows on the
+                  board with its reason and can be reinstated elsewhere.
+                </p>
+              </div>
+            ) : null}
+
+            {report.problems.length ? (
+              <div className="mt-3">
+                <h4 className="label-xs mb-1.5">Rows on the sheets that could not be placed</h4>
+                <ul className="space-y-1">
+                  {report.problems.map((p) => (
+                    <li key={p} className="text-[12.5px] text-muted">{p}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <Empty>Press “Sync now” to check the sheets and see what changed.</Empty>
+        )}
+      </Section>
+    </>
+  );
+}
+
+function outcomeLabel(outcome: string): string {
+  switch (outcome) {
+    case "synced": return "The board was brought in line with the sheets";
+    case "unchanged": return "The sheets have not changed";
+    case "fresh": return "Already checked in the last few minutes";
+    default: return "The sync could not finish";
+  }
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
