@@ -3,26 +3,18 @@
 // ============================================================
 
 /**
- * "Pranav" -> "Pranav Sir", "Soumya" -> "Soumya Sir" (wrong - so name
- * her "Soumya Mam" wherever it's set, and this leaves it alone).
+ * The name exactly as it is stored on the profile - nothing added.
  *
- * Skips anyone who already carries a title (covers "mam" as well as
- * "ma'am"/"maam"/"madam"), skips labels that aren't a person at all
- * (e.g. "Exam Cell" for a CONTEST booking), and skips the shared admin
- * account, which isn't a person - "Exam Cell Sir" or "Admin Sir" would
- * just look wrong. Safe to call on a name that already has an
- * honorific baked in (most seeded teachers do, since nothing else
- * adds it automatically anymore) - it's a no-op for those.
+ * This used to append "Sir" to any name that didn't already carry a
+ * title, which meant guessing at how to address someone from their
+ * name alone. It guessed wrong often enough (and for anyone who isn't
+ * a "Sir" at all) that the whole idea is gone: whatever a person put
+ * in their own profile is what the board shows.
+ *
+ * If a name still reads "… Mam" or "… Sir" on the board, that title
+ * is part of the stored profile name itself, not added here - edit it
+ * on the profile to change it.
  */
-export function withHonorific(name: string): string {
-  const n = (name || "").trim();
-  if (
-    !n ||
-    /\b(sir|ma'?am|mam|madam)\b/i.test(n) ||
-    /\b(cell|committee|office|department|board)\b/i.test(n) ||
-    /^admin$/i.test(n)
-  ) {
-    return n;
-  }
-  return n + " Sir";
+export function displayName(name: string): string {
+  return (name || "").trim();
 }

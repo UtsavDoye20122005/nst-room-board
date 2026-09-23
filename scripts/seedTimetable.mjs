@@ -122,30 +122,29 @@ const BATCH_Y1_LAB_B2 = "y1-lab-b2";
 // first time they sign in. facultyUid is just a label on these seeded
 // sessions; as admin you can move or cancel any of them from the board.
 //
-// Names carry "Sir"/"Mam" directly now - that used to be added
-// automatically for display in Admin -> Timetable, but that panel (and
-// the function that added it) is gone, so nothing else does this for
-// you anymore. Baking it into the stored name is what makes it show up
-// everywhere: the board, Notices, My bookings, all of it.
+// Plain names, no "Sir"/"Mam". Nothing adds a title automatically
+// anywhere in the app anymore, and these stored names are what the
+// board, Notices and My bookings all display, so a title here would
+// be a title everywhere.
 //
 // A lecture and its lab are sometimes different people - ADA Lab and
 // M3/Maths3 Lab each have their own teacher below, distinct from the
 // one who gives that subject's lecture. AP Lab is co-taught, so its
 // facultyName just carries both names.
 const TEACHERS = {
-  AP: { name: "Pranav Sir", uid: "seed-teacher-ap" },
-  ADA: { name: "Ashwin Sir", uid: "seed-teacher-ada" },
-  AI: { name: "Mahfooj Sir", uid: "seed-teacher-ai" },
-  DE: { name: "Adarsh Chauhan Sir", uid: "seed-teacher-de" },
-  M3: { name: "Adhiraj Sir", uid: "seed-teacher-m3" },
-  HOLISTIC: { name: "Soumya Mam", uid: "seed-teacher-holistic" },
+  AP: { name: "Pranav", uid: "seed-teacher-ap" },
+  ADA: { name: "Ashwin", uid: "seed-teacher-ada" },
+  AI: { name: "Mahfooj", uid: "seed-teacher-ai" },
+  DE: { name: "Adarsh Chauhan", uid: "seed-teacher-de" },
+  M3: { name: "Adhiraj", uid: "seed-teacher-m3" },
+  HOLISTIC: { name: "Soumya", uid: "seed-teacher-holistic" },
 };
 
 // Lab-specific overrides - a lab entry below sets `teacher:` to one of
 // these instead of falling back to TEACHERS[entry.subject].
-const AP_LAB_TEACHER = { name: "Pranav Sir & Shubham Sir", uid: "seed-teacher-ap-lab" };
-const ADA_LAB_TEACHER = { name: "Goutam Sir", uid: "seed-teacher-ada-lab" };
-const M3_LAB_TEACHER = { name: "Anupam Sir", uid: "seed-teacher-m3-lab" };
+const AP_LAB_TEACHER = { name: "Pranav & Shubham", uid: "seed-teacher-ap-lab" };
+const ADA_LAB_TEACHER = { name: "Goutam", uid: "seed-teacher-ada-lab" };
+const M3_LAB_TEACHER = { name: "Anupam", uid: "seed-teacher-m3-lab" };
 
 /**
  * date: ISO date of the FIRST occurrence (any week in the term works -

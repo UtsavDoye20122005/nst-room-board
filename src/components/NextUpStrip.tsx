@@ -5,7 +5,7 @@ import { useAuth } from "@/lib/authContext";
 import { useCampus } from "@/lib/campusContext";
 import { todayISO } from "@/lib/dates";
 import { currentSlotIndex, slotRange } from "@/lib/slots";
-import { withHonorific } from "@/lib/people";
+import { displayName } from "@/lib/people";
 import type { Booking } from "@/lib/types";
 
 export function NextUpStrip({
@@ -140,7 +140,7 @@ export function NextUpStrip({
           <p className={"mt-0.5 text-[14px] " + (cancelled ? "text-muted line-through" : "text-ink")}>
             {b.subject}
             {b.title ? " — " + b.title : ""}
-            <span className="font-normal text-muted"> · {withHonorific(b.facultyName)}</span>
+            <span className="font-normal text-muted"> · {displayName(b.facultyName)}</span>
           </p>
           <p className="mt-1 text-[13px] text-ink-2">{walk}</p>
         </div>

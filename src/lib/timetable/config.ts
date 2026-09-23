@@ -125,22 +125,23 @@ export interface SheetTeacher {
  * one piece of the timetable that does NOT come from them.
  *
  * Keys are "SUBJECT" or "SUBJECT:LAB" - a lecture and its lab are
- * often different people. Names carry "Sir"/"Mam" because that is how
- * they are shown everywhere in the app.
+ * often different people. Plain names, no "Sir"/"Mam": nothing in the
+ * app adds a title anymore, and what is stored here is exactly what
+ * the board prints.
  *
  * The uid is a label, not a login. These teachers still sign in and
  * onboard normally; this is only what the board prints under a class.
  */
 export const TEACHERS: Record<string, SheetTeacher> = {
-  AP: { name: "Pranav Sir", uid: "sheet-teacher-ap" },
-  "AP:LAB": { name: "Pranav Sir & Shubham Sir", uid: "sheet-teacher-ap-lab" },
-  ADA: { name: "Ashwin Sir", uid: "sheet-teacher-ada" },
-  "ADA:LAB": { name: "Goutam Sir", uid: "sheet-teacher-ada-lab" },
-  AI: { name: "Mahfooj Sir", uid: "sheet-teacher-ai" },
-  DE: { name: "Adarsh Chauhan Sir", uid: "sheet-teacher-de" },
-  M3: { name: "Adhiraj Sir", uid: "sheet-teacher-m3" },
-  "M3:LAB": { name: "Anupam Sir", uid: "sheet-teacher-m3-lab" },
-  HOLISTIC: { name: "Soumya Mam", uid: "sheet-teacher-holistic" },
+  AP: { name: "Pranav", uid: "sheet-teacher-ap" },
+  "AP:LAB": { name: "Pranav & Shubham", uid: "sheet-teacher-ap-lab" },
+  ADA: { name: "Ashwin", uid: "sheet-teacher-ada" },
+  "ADA:LAB": { name: "Goutam", uid: "sheet-teacher-ada-lab" },
+  AI: { name: "Mahfooj", uid: "sheet-teacher-ai" },
+  DE: { name: "Adarsh Chauhan", uid: "sheet-teacher-de" },
+  M3: { name: "Adhiraj", uid: "sheet-teacher-m3" },
+  "M3:LAB": { name: "Anupam", uid: "sheet-teacher-m3-lab" },
+  HOLISTIC: { name: "Soumya", uid: "sheet-teacher-holistic" },
   CONTEST: { name: "Exam Cell", uid: "sheet-exam-cell" },
 };
 

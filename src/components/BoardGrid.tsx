@@ -14,7 +14,7 @@ import { useEffect, useRef } from "react";
 import { SLOTS, currentSlotIndex, nearestSlotIndex } from "@/lib/slots";
 import { todayISO } from "@/lib/dates";
 import { useCampus } from "@/lib/campusContext";
-import { withHonorific } from "@/lib/people";
+import { displayName } from "@/lib/people";
 import type { Booking, Room } from "@/lib/types";
 
 export interface BoardGridProps {
@@ -246,8 +246,8 @@ function Cell({
         onClick={() => onOpenSession(taken)}
         title={
           pending
-            ? "Awaiting admin approval — booked by " + withHonorific(taken.facultyName)
-            : "Booked by " + withHonorific(taken.facultyName)
+            ? "Awaiting admin approval — booked by " + displayName(taken.facultyName)
+            : "Booked by " + displayName(taken.facultyName)
         }
       >
         <span
@@ -268,7 +268,7 @@ function Cell({
             {taken.title}
           </span>
         ) : null}
-        <span className="text-[11px] text-muted [overflow-wrap:anywhere]">{withHonorific(taken.facultyName)}</span>
+        <span className="text-[11px] text-muted [overflow-wrap:anywhere]">{displayName(taken.facultyName)}</span>
         {taken.batchIds.length ? (
           <span className="mt-0.5 block text-[10px] leading-tight text-muted [overflow-wrap:anywhere]">
             {batchNames(taken.batchIds)}
@@ -288,7 +288,7 @@ function Cell({
         <span className="text-[13px] font-semibold leading-tight line-through decoration-[1.5px] [overflow-wrap:anywhere]">
           {cancelled.subject}
         </span>
-        <span className="text-[11px] text-muted">{withHonorific(cancelled.facultyName)}</span>
+        <span className="text-[11px] text-muted">{displayName(cancelled.facultyName)}</span>
         {canBook ? (
           <span className="mt-0.5 font-mono text-[9.5px] uppercase tracking-[.08em] text-free">
             + room is free

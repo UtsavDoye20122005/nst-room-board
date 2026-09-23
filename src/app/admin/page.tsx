@@ -27,7 +27,7 @@ import {
 import { usePendingApprovals } from "@/lib/usePendingApprovals";
 import { clockTime, prettyDate } from "@/lib/dates";
 import { slotRange } from "@/lib/slots";
-import { withHonorific } from "@/lib/people";
+import { displayName } from "@/lib/people";
 import { YEARS, yearLabel } from "@/lib/seedData";
 import { useToast } from "@/components/Toast";
 import { SegTabs } from "@/components/PageHeader";
@@ -534,7 +534,7 @@ function ApprovalsPanel() {
                   {roomName(b.roomId)} · {prettyDate(b.date)} · {slotRange(b.startSlot, b.endSlot)}
                 </div>
                 <div className="mt-0.5 text-[12px] text-muted [overflow-wrap:anywhere]">
-                  {withHonorific(b.facultyName)}
+                  {displayName(b.facultyName)}
                   {b.batchIds.length ? " · " + batchNames(b.batchIds) : ""}
                   {b.seriesId ? " · weekly series" : ""}
                 </div>
