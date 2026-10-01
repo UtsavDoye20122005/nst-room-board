@@ -678,6 +678,10 @@ export async function moveBooking(
     tx.update(doc(db, "bookings", booking.id), {
       roomId: toRoomId,
       movedFrom: booking.roomId,
+      // Giving it a room is exactly what a displaced booking was
+      // waiting for, so this is also how one gets put right.
+      status: "confirmed",
+      displacedReason: "",
       updatedAt: Date.now(),
     });
 

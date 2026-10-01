@@ -6,7 +6,14 @@
 
 export type Role = "faculty" | "student" | "admin";
 export type Kind = "exam" | "class" | "lab" | "event";
-export type Status = "confirmed" | "cancelled";
+/**
+ * "displaced" is a teacher's booking whose room the official timetable
+ * took back during a sheet sync. It is NOT cancelled - the class still
+ * needs to happen - it just has nowhere to be until the teacher picks
+ * another room. It holds no slotLocks, so it occupies nothing, and the
+ * board treats only "confirmed" as taking a room.
+ */
+export type Status = "confirmed" | "cancelled" | "displaced";
 
 /** A signed-in person. Document id is the Firebase Auth uid. */
 export interface UserProfile {
@@ -95,6 +102,11 @@ export interface Booking {
    */
   approved?: boolean;
   cancelReason?: string;
+  /** Why the timetable took this booking's room, set alongside
+   *  status "displaced". Shown to the teacher so they know what
+   *  happened without having to ask anyone. */
+  displacedReason?: string;
+  displacedAt?: number;
   /** Room id this session was moved away from, if any. */
   movedFrom?: string | null;
   /**

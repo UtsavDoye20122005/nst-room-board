@@ -88,6 +88,9 @@ function MyBody() {
           {list.map((b) => {
             const rel = relativeDay(b.date);
             const cancelled = b.status === "cancelled";
+            // The timetable took this one's room. Not cancelled - it
+            // just needs a new room before it means anything.
+            const displaced = b.status === "displaced";
             return (
               <button
                 key={b.id}
@@ -100,7 +103,12 @@ function MyBody() {
                   <div className="text-muted">{slotRange(b.startSlot, b.endSlot)}</div>
                 </div>
 
-                <div className="justify-self-start rounded bg-surface-3 px-2 py-1 text-center font-mono text-[11.5px] font-semibold tracking-[.06em] sm:justify-self-auto">
+                <div
+                  className={
+                    "justify-self-start rounded px-2 py-1 text-center font-mono text-[11.5px] font-semibold tracking-[.06em] sm:justify-self-auto " +
+                    (displaced ? "bg-pending-soft text-pending line-through" : "bg-surface-3")
+                  }
+                >
                   {campus.roomName(b.roomId)}
                 </div>
 
@@ -113,6 +121,12 @@ function MyBody() {
                     {b.kind} · {b.facultyName} · {campus.batchNames(b.batchIds)}
                     {b.movedFrom ? " · moved from " + campus.roomName(b.movedFrom) : ""}
                   </div>
+                  {displaced ? (
+                    <div className="mt-1 text-[12px] font-medium text-pending">
+                      {b.displacedReason || "The official timetable now needs this room."} Open it and use
+                      “Change room” to pick another — nothing has been cancelled.
+                    </div>
+                  ) : null}
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -121,12 +135,14 @@ function MyBody() {
                       "rounded border px-1.5 py-0.5 font-mono text-[9.5px] uppercase tracking-[.1em] " +
                       (cancelled
                         ? "border-off-line bg-off-soft text-off"
-                        : b.movedFrom
-                          ? "border-moved-line bg-moved-soft text-moved"
-                          : "border-free-line bg-free-soft text-free")
+                        : displaced
+                          ? "border-pending-line bg-pending-soft text-pending"
+                          : b.movedFrom
+                            ? "border-moved-line bg-moved-soft text-moved"
+                            : "border-free-line bg-free-soft text-free")
                     }
                   >
-                    {cancelled ? "Cancelled" : b.movedFrom ? "Moved" : "On"}
+                    {cancelled ? "Cancelled" : displaced ? "Needs a room" : b.movedFrom ? "Moved" : "On"}
                   </span>
                   <span className="btn btn-sm pointer-events-none">Open</span>
                 </div>

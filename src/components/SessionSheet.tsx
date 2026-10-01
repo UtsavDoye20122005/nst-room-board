@@ -53,6 +53,10 @@ export function SessionSheet({ booking, onClose }: { booking: Booking; onClose: 
   // Undefined means approved - everything booked before approvals
   // existed, and every seeded timetable row, is already legitimate.
   const awaitingApproval = booking.approved === false;
+  // Room taken back by the official timetable. Still the teacher's
+  // session - it just has nowhere to be until they re-room it, which
+  // is why "Change room" stays available below.
+  const displaced = booking.status === "displaced";
 
   // How many confirmed weeks of this series are still loaded (the board
   // only keeps ~3 weeks of history + whatever is ahead, so this counts
@@ -352,6 +356,15 @@ export function SessionSheet({ booking, onClose }: { booking: Booking; onClose: 
         <div className="mb-4 rounded-lg border border-off-line bg-off-soft px-3 py-2.5 text-[13px]">
           <strong className="font-semibold">This session is cancelled.</strong>
           {booking.cancelReason ? " " + booking.cancelReason : ""} The room is free for anyone to book.
+        </div>
+      ) : null}
+
+      {displaced ? (
+        <div className="mb-4 rounded border border-pending-line bg-pending-soft px-3 py-2.5 text-[13px]">
+          <strong className="font-semibold">This session needs a new room.</strong>{" "}
+          {booking.displacedReason || "The official timetable now needs the room this was booked in."}{" "}
+          It has not been cancelled — pick another room with “Change room” below and it goes back on the
+          board as normal.
         </div>
       ) : null}
 

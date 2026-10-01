@@ -33,6 +33,7 @@
 
 import { createHash } from "node:crypto";
 import { adminDb } from "../firebaseAdmin";
+import { sendEmail } from "../email";
 import { slotRange } from "../slots";
 import type { Booking, Room } from "../types";
 import { FRESH_FOR_MS, HORIZON_WEEKS, SHEETS, SYNC_DOC } from "./config";
@@ -48,7 +49,8 @@ export interface SyncReport {
   created: number;
   updated: number;
   removed: number;
-  /** Teachers' own bookings cancelled to make room for the timetable. */
+  /** Teachers' own bookings that lost their room to the timetable.
+   *  Not cancelled - flagged "needs a room", and the teacher emailed. */
   displaced: string[];
   /** Rows the sheets contain that could not be placed. */
   problems: string[];
@@ -293,23 +295,30 @@ async function reconcile(
   }
 
   // --- b. a teacher's own booking standing where the timetable goes ---
+  // Collected so each affected teacher can be emailed once the writes
+  // have actually landed - telling someone their room is gone before
+  // the change is committed would be a lie if the commit then failed.
+  const displacedBookings: { booking: Booking; roomName: string; reason: string }[] = [];
   const wanted = slotsWanted(desired);
   for (const booking of manual) {
     const hit = firstClash(booking, wanted);
     if (!hit) continue;
     const roomName = rooms.find((r) => r.id === booking.roomId)?.name || booking.roomId;
     const reason = "The official timetable now uses " + roomName + " at this hour (" + hit + ").";
+    // Displaced, NOT cancelled - the teacher's class still needs to
+    // happen, it just has no room until they pick another one. The
+    // locks go either way, because the timetable is taking the room.
     bookingUpdates.push({
       id: booking.id,
-      data: { status: "cancelled", cancelReason: reason, updatedAt: now },
+      data: { status: "displaced", displacedReason: reason, displacedAt: now, updatedAt: now },
     });
     for (const key of lockKeys(booking)) lockDeletes.add(key);
     noticeWrites.push({
-      kind: "cancelled",
+      kind: "moved",
       bookingId: booking.id,
       text:
-        "CANCELLED — " + booking.subject + " (" + booking.title + ") in " + roomName +
-        " on " + booking.date + " " + slotRange(booking.startSlot, booking.endSlot) +
+        "NEEDS A ROOM — " + booking.subject + " (" + booking.title + ") on " + booking.date + " " +
+        slotRange(booking.startSlot, booking.endSlot) + " no longer has " + roomName +
         ". Reason: " + reason,
       batchIds: booking.batchIds || [],
       years: booking.years || [],
@@ -317,6 +326,7 @@ async function reconcile(
       byName: "Timetable sync",
       createdAt: now,
     });
+    displacedBookings.push({ booking, roomName, reason });
     result.displaced.push(
       booking.facultyName + " — " + booking.subject + " in " + roomName + ", " +
       booking.date + " " + slotRange(booking.startSlot, booking.endSlot)
@@ -398,7 +408,103 @@ async function reconcile(
   for (const [key, data] of lockWrites) writer.set(db.collection("slotLocks").doc(key), data);
   await writer.flush();
 
+  // Only now that the change is real: tell each teacher who lost a
+  // room. Mail never fails the sync - the board is already correct
+  // and the booking is already flagged whether or not this gets out.
+  if (displacedBookings.length) {
+    try {
+      await emailDisplacedTeachers(db, displacedBookings);
+    } catch {
+      /* ignore - see above */
+    }
+  }
+
   return result;
+}
+
+/**
+ * One email per affected teacher, to that teacher only - not the whole
+ * staff list, because nobody else has anything to do about it. A
+ * teacher with several displaced sessions gets one message listing
+ * them all rather than one per booking.
+ */
+async function emailDisplacedTeachers(
+  db: FirebaseFirestore.Firestore,
+  items: { booking: Booking; roomName: string; reason: string }[]
+): Promise<void> {
+  const byTeacher = new Map<string, { booking: Booking; roomName: string; reason: string }[]>();
+  for (const item of items) {
+    const uid = item.booking.facultyUid;
+    if (!uid) continue;
+    const list = byTeacher.get(uid) || [];
+    list.push(item);
+    byTeacher.set(uid, list);
+  }
+
+  for (const [uid, list] of byTeacher) {
+    const snap = await db.collection("users").doc(uid).get();
+    const email = (snap.data() as { email?: string } | undefined)?.email;
+    // A seeded//timetable-owned uid has no real profile or inbox -
+    // nothing to tell, and nobody is waiting to hear it.
+    if (!email || !email.includes("@") || email.endsWith("@nst-room-board.internal")) continue;
+
+    const lines = list.map(
+      (i) =>
+        "• " + i.booking.subject + (i.booking.title ? " (" + i.booking.title + ")" : "") +
+        " on " + i.booking.date + ", " + slotRange(i.booking.startSlot, i.booking.endSlot) +
+        " — was in " + i.roomName
+    );
+
+    const plural = list.length === 1 ? "a room" : "rooms";
+    const text = [
+      "Hi,",
+      "",
+      "The official timetable was updated, and " +
+        (list.length === 1 ? "one of your bookings has" : list.length + " of your bookings have") +
+        " lost " + plural + " because the timetable now needs that space:",
+      "",
+      ...lines,
+      "",
+      "Nothing has been cancelled — the session is still yours, it just needs a different room.",
+      "Open the room board, go to My bookings, and use “Change room” to put it somewhere free.",
+      "",
+      "NST Room Board",
+    ].join("\n");
+
+    const html =
+      '<div style="font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;font-size:15px;line-height:1.55">' +
+      "<p>Hi,</p><p>The official timetable was updated, and " +
+      (list.length === 1 ? "one of your bookings has" : list.length + " of your bookings have") +
+      " lost " + plural + " because the timetable now needs that space:</p><ul>" +
+      list
+        .map(
+          (i) =>
+            "<li><strong>" + esc(i.booking.subject) + "</strong>" +
+            (i.booking.title ? " (" + esc(i.booking.title) + ")" : "") +
+            " on " + esc(i.booking.date) + ", " + esc(slotRange(i.booking.startSlot, i.booking.endSlot)) +
+            " — was in " + esc(i.roomName) + "</li>"
+        )
+        .join("") +
+      "</ul><p><strong>Nothing has been cancelled</strong> — the session is still yours, it just needs a " +
+      "different room. Open the room board, go to <em>My bookings</em>, and use “Change room” to put it " +
+      "somewhere free.</p><p style=\"color:#5E6864;font-size:12.5px\">NST Room Board</p></div>";
+
+    await sendEmail({
+      subject:
+        list.length === 1
+          ? "Your booking needs a new room — the timetable changed"
+          : "Your bookings need new rooms — the timetable changed",
+      text,
+      html,
+      bcc: [email],
+    });
+  }
+}
+
+function esc(s: string): string {
+  return String(s ?? "").replace(/[&<>"']/g, (c) =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string
+  );
 }
 
 function lockKeys(booking: Booking): string[] {
