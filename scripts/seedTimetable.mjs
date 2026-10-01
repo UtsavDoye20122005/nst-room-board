@@ -134,7 +134,7 @@ const BATCH_Y1_LAB_B2 = "y1-lab-b2";
 const TEACHERS = {
   AP: { name: "Pranav", uid: "seed-teacher-ap" },
   ADA: { name: "Ashwin", uid: "seed-teacher-ada" },
-  AI: { name: "Mahfooj", uid: "seed-teacher-ai" },
+  AI: { name: "Suryanshu", uid: "seed-teacher-ai" },
   DE: { name: "Adarsh Chauhan", uid: "seed-teacher-de" },
   M3: { name: "Adhiraj", uid: "seed-teacher-m3" },
   HOLISTIC: { name: "Soumya", uid: "seed-teacher-holistic" },
@@ -142,8 +142,8 @@ const TEACHERS = {
 
 // Lab-specific overrides - a lab entry below sets `teacher:` to one of
 // these instead of falling back to TEACHERS[entry.subject].
-const AP_LAB_TEACHER = { name: "Pranav & Shubham", uid: "seed-teacher-ap-lab" };
-const ADA_LAB_TEACHER = { name: "Goutam", uid: "seed-teacher-ada-lab" };
+const AP_LAB_TEACHER = { name: "Pranav", uid: "seed-teacher-ap-lab" };
+const ADA_LAB_TEACHER = { name: "Gautam", uid: "seed-teacher-ada-lab" };
 const M3_LAB_TEACHER = { name: "Anupam", uid: "seed-teacher-m3-lab" };
 
 /**

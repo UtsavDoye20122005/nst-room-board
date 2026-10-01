@@ -129,26 +129,52 @@ export interface SheetTeacher {
  * app adds a title anymore, and what is stored here is exactly what
  * the board prints.
  *
+ * Taken from the Theory-and-Lab faculty list, using the PRIMARY
+ * faculty for each subject; secondaries are not shown, since the board
+ * prints one name per session.
+ *
+ * Where two primaries split the lab batches between them (PSP, A.PHY
+ * and S&AI each do), both names are listed together - this map has one
+ * entry per subject, not per lab batch, so "Shubham & Pavan" is as
+ * precise as it can be. Making the board name the right one per batch
+ * would mean keying these by batch as well as subject.
+ *
  * The uid is a label, not a login. These teachers still sign in and
  * onboard normally; this is only what the board prints under a class.
  */
 export const TEACHERS: Record<string, SheetTeacher> = {
+  // ---- 1st Year ----
+  PSP: { name: "Adarsh Chauhan", uid: "sheet-teacher-psp" },
+  "PSP:LAB": { name: "Gautam & Ashwin", uid: "sheet-teacher-psp-lab" },
+  M1: { name: "Akshit", uid: "sheet-teacher-m1" },
+  "M1:LAB": { name: "Akshay", uid: "sheet-teacher-m1-lab" },
+  "A.PHY": { name: "Gaurav Singh", uid: "sheet-teacher-aphy" },
+  "A.PHY:LAB": { name: "Deeksha & Pratyush", uid: "sheet-teacher-aphy-lab" },
+  "S&AI": { name: "Priyanshu", uid: "sheet-teacher-sai" },
+  "S&AI:LAB": { name: "Shubham & Pavan", uid: "sheet-teacher-sai-lab" },
+
+  // ---- 2nd Year ----
   AP: { name: "Pranav", uid: "sheet-teacher-ap" },
-  "AP:LAB": { name: "Pranav & Shubham", uid: "sheet-teacher-ap-lab" },
+  "AP:LAB": { name: "Pranav", uid: "sheet-teacher-ap-lab" },
   ADA: { name: "Ashwin", uid: "sheet-teacher-ada" },
-  "ADA:LAB": { name: "Goutam", uid: "sheet-teacher-ada-lab" },
-  AI: { name: "Mahfooj", uid: "sheet-teacher-ai" },
+  "ADA:LAB": { name: "Gautam", uid: "sheet-teacher-ada-lab" },
+  AI: { name: "Suryanshu", uid: "sheet-teacher-ai" },
+  "AI:LAB": { name: "Mehfooz Ali", uid: "sheet-teacher-ai-lab" },
   DE: { name: "Adarsh Chauhan", uid: "sheet-teacher-de" },
+  "DE:LAB": { name: "Adarsh Chauhan", uid: "sheet-teacher-de-lab" },
   M3: { name: "Adhiraj", uid: "sheet-teacher-m3" },
   "M3:LAB": { name: "Anupam", uid: "sheet-teacher-m3-lab" },
+
+  // ---- not in the faculty sheet ----
   HOLISTIC: { name: "Soumya", uid: "sheet-teacher-holistic" },
   CONTEST: { name: "Exam Cell", uid: "sheet-exam-cell" },
 };
 
 /**
- * Used for every 1st Year subject, whose teachers we have not been
- * given yet. Deliberately not a guess at a real name - add the real
- * ones to TEACHERS above and the next sync corrects every session.
+ * Used for a subject with no entry above - currently ENGLISH, LHL and
+ * YOGA, which the faculty list does not cover. Deliberately not a
+ * guess at a real name: add the real one to TEACHERS and the next
+ * sync corrects every session that uses it.
  */
 export const TEACHER_UNKNOWN: SheetTeacher = { name: "Faculty TBD", uid: "sheet-teacher-tbd" };
 
