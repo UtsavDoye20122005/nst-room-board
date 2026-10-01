@@ -167,14 +167,17 @@ export const TEACHERS: Record<string, SheetTeacher> = {
 
   // ---- not in the faculty sheet ----
   HOLISTIC: { name: "Soumya", uid: "sheet-teacher-holistic" },
+  LHL: { name: "Soumitra", uid: "sheet-teacher-lhl" },
+  // Yoga is taught by the partner institute rather than one named
+  // member of our own faculty, so the board says so plainly.
+  YOGA: { name: "SVYASA Faculty", uid: "sheet-teacher-yoga" },
   CONTEST: { name: "Exam Cell", uid: "sheet-exam-cell" },
 };
 
 /**
- * Used for a subject with no entry above - currently ENGLISH, LHL and
- * YOGA, which the faculty list does not cover. Deliberately not a
- * guess at a real name: add the real one to TEACHERS and the next
- * sync corrects every session that uses it.
+ * Used for a subject with no entry above - currently just ENGLISH.
+ * Deliberately not a guess at a real name: add the real one to
+ * TEACHERS and the next sync corrects every session that uses it.
  */
 export const TEACHER_UNKNOWN: SheetTeacher = { name: "Faculty TBD", uid: "sheet-teacher-tbd" };
 
