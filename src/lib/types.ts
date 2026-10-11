@@ -120,6 +120,12 @@ export interface Booking {
   seriesId?: string | null;
   seriesUntil?: string | null;
   /**
+   * The series' repeat rule in words - "Every weekday", "Every 2 weeks
+   * on Mon, Thu". Absent on series made before custom repeats existed,
+   * which were all weekly; seriesLabelOf() in db.ts fills those in.
+   */
+  seriesLabel?: string | null;
+  /**
    * "sheet" means this session was written by the Google Sheet sync
    * (src/lib/timetable) and is owned by it: the next sync will correct
    * or remove it to match the sheet, so editing one here is pointless.

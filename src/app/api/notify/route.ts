@@ -29,16 +29,22 @@ function dateLabel(iso: string): string {
 }
 
 /**
- * A booking created as part of a weekly series (seriesUntil is set)
- * reads as "Every Monday, from 7 Sep 2026 to 21 Dec 2026" instead of
- * a single date - this is the email for the first week, so a single
+ * A booking created as part of a repeating series (seriesUntil is set)
+ * reads as "Every weekday, from 7 Sep 2026 to 21 Dec 2026" instead of a
+ * single date - this is the email for the first session, so a single
  * date would be misleading about what was actually booked.
+ *
+ * The rule comes from the stored seriesLabel. Series made before custom
+ * repeats existed have none, but all of those were weekly on their own
+ * weekday, so that is the fallback. (Worked out here rather than via
+ * db.ts's seriesLabelOf, which would drag the client Firebase SDK into
+ * this server route.)
  */
 function dateLabelForBooking(booking: Booking): string {
   if (!booking.seriesUntil) return dateLabel(booking.date);
   const [y, m, d] = booking.date.split("-").map(Number);
-  const weekday = DOW[new Date(y, m - 1, d).getDay()];
-  return "Every " + weekday + ", from " + dateLabel(booking.date) + " to " + dateLabel(booking.seriesUntil);
+  const rule = booking.seriesLabel || "Every " + DOW[new Date(y, m - 1, d).getDay()];
+  return rule + ", from " + dateLabel(booking.date) + " to " + dateLabel(booking.seriesUntil);
 }
 
 function timeLabel(startSlot: number, endSlot: number): string {

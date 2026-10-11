@@ -41,7 +41,7 @@ import {
 } from "firebase/firestore";
 import { getDb } from "./firebase";
 import { slotRange } from "./slots";
-import { fromISO, shiftDays, shortDate, weekdayName } from "./dates";
+import { DOW_LONG, fromISO, shiftDays, shortDate, weekdayName } from "./dates";
 import type { Batch, Booking, Kind, Notice, Room, RosterEntry, SlotLock, UserProfile } from "./types";
 
 export function lockId(date: string, roomId: string, slot: number): string {
@@ -258,7 +258,7 @@ export interface NewBookingInput {
  */
 async function writeBookingOccurrence(
   input: NewBookingInput,
-  series: { seriesId: string | null; seriesUntil: string | null }
+  series: { seriesId: string | null; seriesUntil: string | null; seriesLabel?: string | null }
 ): Promise<string> {
   const db = getDb();
   const now = Date.now();
@@ -310,6 +310,7 @@ async function writeBookingOccurrence(
       movedFrom: null,
       seriesId: series.seriesId,
       seriesUntil: series.seriesUntil,
+      seriesLabel: series.seriesLabel ?? null,
       createdAt: now,
       updatedAt: now,
     };
@@ -356,36 +357,107 @@ export async function createBooking(input: NewBookingInput): Promise<string> {
 }
 
 /**
- * How a repeating booking steps forward.
+ * A repeat, shaped like Google Calendar's "Custom recurrence":
  *
- * "weekdays" exists because a college week is Mon-Fri: a plain daily
- * repeat across a semester would otherwise litter every Saturday and
- * Sunday with sessions nobody attends. "daily" is still there for the
- * odd block that genuinely runs through a weekend.
+ *   Repeat every [interval] [day | week]
+ *   Repeat on    [S M T W T F S]          (weeks only)
+ *   Ends         on [date]  |  after [count] occurrences
+ *
+ * There is deliberately no "Never". Calendar can promise that because
+ * it stores a rule and works out occurrences when you look; this board
+ * books a real room for every single occurrence up front, so every
+ * series has to stop somewhere.
  */
-export type RepeatMode = "weekly" | "weekdays" | "daily";
+export interface RecurrenceRule {
+  interval: number;
+  unit: "day" | "week";
+  /** 0 = Sunday ... 6 = Saturday. Only read when unit is "week". */
+  weekdays: number[];
+  end: { type: "on"; date: string } | { type: "after"; count: number };
+}
+
+/** Hard ceiling on one series, whatever the rule says. A full semester
+ *  of weekdays is ~76; this only stops a typo from booking a year. */
+export const MAX_OCCURRENCES = 200;
 
 /**
- * Every date a repeat lands on, first occurrence included. Shared by
- * the booking write and the modal's "= N sessions" preview, so what a
- * teacher is shown before confirming is the same list that gets
- * booked, rather than two separate calculations that can drift.
+ * Every date a rule lands on, starting from `fromDate`. Shared by the
+ * booking write and the modal's live preview, so the count a teacher
+ * sees before confirming is exactly the list that gets booked.
+ *
+ * Week intervals count calendar weeks (Sunday-start, as Calendar does)
+ * from the week `fromDate` is in - "every 2 weeks on Mon and Thu" means
+ * both days in week 0, nothing in week 1, both again in week 2. The
+ * clicked date itself is only booked if it matches the rule: a teacher
+ * who opens Sunday and picks Mon-Fri gets Monday onward, not a Sunday
+ * session they never asked for. The preview shows the true first date
+ * so that is visible before they confirm.
  */
-export function recurringDates(fromDate: string, untilDate: string, repeat: RepeatMode): string[] {
-  const dates: string[] = [];
-  const step = repeat === "weekly" ? 7 : 1;
-  // A semester of weekdays is ~110 days; this only guards against a
-  // runaway far-future "until" date, it is not a real limit.
-  const MAX = 400;
+export function recurringDates(fromDate: string, rule: RecurrenceRule): string[] {
+  const interval = Math.max(1, Math.floor(rule.interval || 1));
+  const limit =
+    rule.end.type === "after"
+      ? Math.min(MAX_OCCURRENCES, Math.max(1, Math.floor(rule.end.count || 1)))
+      : MAX_OCCURRENCES;
+  const until = rule.end.type === "on" ? rule.end.date : null;
 
-  for (let d = fromDate; d <= untilDate && dates.length < MAX; d = shiftDays(d, step)) {
-    if (repeat === "weekdays") {
-      const day = fromISO(d).getDay();
-      if (day === 0 || day === 6) continue;
+  const dates: string[] = [];
+
+  if (rule.unit === "day") {
+    for (let d = fromDate; dates.length < limit && (!until || d <= until); d = shiftDays(d, interval)) {
+      dates.push(d);
     }
+    return dates;
+  }
+
+  const days = new Set(rule.weekdays);
+  if (days.size === 0) return dates; // "weekly on no days" books nothing
+
+  const weekStart = (iso: string) => shiftDays(iso, -fromISO(iso).getDay());
+  const firstWeek = weekStart(fromDate);
+
+  // Walk day by day - at most ~3 years of days before the occurrence
+  // limit stops it, which is plenty for any realistic rule.
+  for (let d = fromDate, guard = 0; dates.length < limit && guard < 1100; d = shiftDays(d, 1), guard++) {
+    if (until && d > until) break;
+    const weeksIn = Math.round((fromISO(weekStart(d)).getTime() - fromISO(firstWeek).getTime()) / (7 * 86400000));
+    if (weeksIn % interval !== 0) continue;
+    if (!days.has(fromISO(d).getDay())) continue;
     dates.push(d);
   }
   return dates;
+}
+
+const DAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/**
+ * What a booking's series is, in words. Series made before custom
+ * repeats existed have no stored label, but every one of them was
+ * weekly on its own weekday - so "Every <that weekday>" is not a guess
+ * for those, it is what they actually are.
+ */
+export function seriesLabelOf(b: Pick<Booking, "date" | "seriesLabel">): string {
+  return b.seriesLabel || "Every " + weekdayName(b.date);
+}
+
+/**
+ * The rule in words, Calendar-style: "Every weekday", "Every 2 weeks on
+ * Mon, Thu", "Every 3 days". Stored on each occurrence as `seriesLabel`
+ * so the board can say what a series actually is instead of assuming
+ * it is weekly.
+ */
+export function describeRecurrence(rule: RecurrenceRule): string {
+  const n = Math.max(1, Math.floor(rule.interval || 1));
+  if (rule.unit === "day") return n === 1 ? "Every day" : "Every " + n + " days";
+
+  const days = [...new Set(rule.weekdays)].sort((a, b) => a - b);
+  const isWeekdays = days.length === 5 && [1, 2, 3, 4, 5].every((d) => days.includes(d));
+  const isEveryDay = days.length === 7;
+
+  if (n === 1 && isWeekdays) return "Every weekday";
+  if (n === 1 && isEveryDay) return "Every day";
+  if (n === 1 && days.length === 1) return "Every " + DOW_LONG[days[0]];
+  return (n === 1 ? "Weekly" : "Every " + n + " weeks") + " on " + days.map((d) => DAY_SHORT[d]).join(", ");
 }
 
 export interface RecurringBookingResult {
@@ -396,14 +468,14 @@ export interface RecurringBookingResult {
 }
 
 /**
- * Books the same room and hours every week, on the same weekday as
- * `input.date`, up to and including `untilDate`.
+ * Books the same room and hours on every date `rule` produces, starting
+ * from `input.date`.
  *
- * Each week is its own transaction and its own conflict check - a
- * clash on one week (a holiday someone already booked over, say)
- * skips only that week rather than failing the whole semester. The
- * caller gets back exactly which dates landed and which didn't, and
- * only ONE notice is posted for the whole series.
+ * Each occurrence is its own transaction and its own conflict check - a
+ * clash on one date (a holiday someone already booked over, say) skips
+ * only that date rather than failing the whole series. The caller gets
+ * back exactly which dates landed and which didn't, and only ONE notice
+ * is posted for the whole series.
  *
  * `actor` is who actually DID this, for the notice's byline - normally
  * that's the same person as input.facultyUid/facultyName (a teacher
@@ -415,11 +487,12 @@ export interface RecurringBookingResult {
  */
 export async function createRecurringBooking(
   input: NewBookingInput,
-  untilDate: string,
-  repeat: RepeatMode = "weekly",
+  rule: RecurrenceRule,
   actor?: { uid: string; name: string }
 ): Promise<RecurringBookingResult> {
-  const dates = recurringDates(input.date, untilDate, repeat);
+  const dates = recurringDates(input.date, rule);
+  const seriesLabel = describeRecurrence(rule);
+  const seriesUntil = dates.length ? dates[dates.length - 1] : null;
 
   if (dates.length === 0) {
     return { seriesId: null, firstBookingId: null, bookedDates: [], skipped: [] };
@@ -438,7 +511,7 @@ export async function createRecurringBooking(
 
   for (const date of dates) {
     try {
-      const id = await writeBookingOccurrence({ ...input, date }, { seriesId, seriesUntil: untilDate });
+      const id = await writeBookingOccurrence({ ...input, date }, { seriesId, seriesUntil, seriesLabel });
       firstBookingId = firstBookingId ?? id;
       bookedDates.push(date);
     } catch (e) {
@@ -450,17 +523,12 @@ export async function createRecurringBooking(
   }
 
   if (bookedDates.length > 0 && firstBookingId) {
-    const cadence =
-      repeat === "weekly" ? "every " + weekdayName(input.date)
-      : repeat === "weekdays" ? "every weekday"
-      : "every day";
-    const unit = repeat === "weekly" ? "week" : "day";
     const text =
-      input.subject + " — " + input.title + " · " + input.roomName + " · " + cadence + ", " +
+      input.subject + " — " + input.title + " · " + input.roomName + " · " + seriesLabel.toLowerCase() + ", " +
       slotRange(input.startSlot, input.endSlot) + ", " + shortDate(bookedDates[0]) + " to " +
-      shortDate(bookedDates[bookedDates.length - 1]) + " (" + bookedDates.length + " " + unit +
+      shortDate(bookedDates[bookedDates.length - 1]) + " (" + bookedDates.length + " session" +
       (bookedDates.length === 1 ? "" : "s") + ")" +
-      (skipped.length ? " — " + skipped.length + " " + unit + (skipped.length === 1 ? "" : "s") + " skipped, already taken" : "");
+      (skipped.length ? " — " + skipped.length + " skipped, already taken" : "");
 
     await addDoc(collection(getDb(), "notices"), noticeRecord({
       kind: "booked",
@@ -561,7 +629,7 @@ export async function cancelSeriesFromDate(
     bookingId: first.id,
     text:
       "CANCELLED (series) — " + first.subject + " (" + first.title + ") in " + roomName +
-      ", every " + weekdayName(first.date) + " from " + shortDate(fromDate) + " onward" +
+      ", " + seriesLabelOf(first).toLowerCase() + " from " + shortDate(fromDate) + " onward" +
       " (" + toCancel.length + " session" + (toCancel.length === 1 ? "" : "s") + ")" +
       (reason ? ". Reason: " + reason : ""),
     batchIds: first.batchIds,

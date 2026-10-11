@@ -19,9 +19,10 @@ import {
   deleteBooking,
   moveBooking,
   reinstateBooking,
+  seriesLabelOf,
 } from "@/lib/db";
 import { notifyStudents } from "@/lib/notify";
-import { clockTime, prettyDate, shortDate, weekdayName } from "@/lib/dates";
+import { clockTime, prettyDate, shortDate } from "@/lib/dates";
 import { formatDuration, slotRange } from "@/lib/slots";
 import { yearLabel } from "@/lib/seedData";
 import type { Booking } from "@/lib/types";
@@ -205,7 +206,7 @@ export function SessionSheet({ booking, onClose }: { booking: Booking; onClose: 
 
         {isSeries ? (
           <div className="mb-4 space-y-2">
-            <span className="label-xs">This is part of a weekly series</span>
+            <span className="label-xs">This is part of a repeating series — {seriesLabelOf(booking).toLowerCase()}</span>
             <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-line-strong bg-surface p-3">
               <input
                 type="radio"
@@ -214,9 +215,9 @@ export function SessionSheet({ booking, onClose }: { booking: Booking; onClose: 
                 onChange={() => setCancelWholeSeries(false)}
               />
               <span className="text-[13.5px]">
-                Just this week ({shortDate(booking.date)})
+                Just this one ({shortDate(booking.date)})
                 <span className="mt-0.5 block text-[12px] text-muted">
-                  The other {seriesAheadCount} upcoming week{seriesAheadCount === 1 ? "" : "s"} stay booked.
+                  The other {seriesAheadCount} upcoming session{seriesAheadCount === 1 ? "" : "s"} stay booked.
                 </span>
               </span>
             </label>
@@ -228,7 +229,7 @@ export function SessionSheet({ booking, onClose }: { booking: Booking; onClose: 
                 onChange={() => setCancelWholeSeries(true)}
               />
               <span className="text-[13.5px]">
-                This and every future {weekdayName(booking.date)}
+                This and every later session in the series
                 <span className="mt-0.5 block text-[12px] text-muted">
                   Ends the series from {shortDate(booking.date)} onward — {seriesAheadCount + 1} sessions in total.
                 </span>
@@ -387,8 +388,8 @@ export function SessionSheet({ booking, onClose }: { booking: Booking; onClose: 
 
       {booking.seriesId ? (
         <div className="mb-4 flex items-center gap-2 rounded-lg border border-line bg-surface-2 px-3 py-2 text-[12.5px] text-ink-2">
-          <span className="pill">Weekly series</span>
-          Every {weekdayName(booking.date)}
+          <span className="pill">Repeating</span>
+          {seriesLabelOf(booking)}
           {booking.seriesUntil ? " until " + shortDate(booking.seriesUntil) : ""}
           {seriesAheadCount > 0 ? " · " + seriesAheadCount + " more upcoming" : ""}
         </div>

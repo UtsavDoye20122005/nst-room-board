@@ -23,6 +23,7 @@ import {
   setUserSubjects,
   upsertBatch,
   upsertRoom,
+  seriesLabelOf,
 } from "@/lib/db";
 import { usePendingApprovals } from "@/lib/usePendingApprovals";
 import { clockTime, prettyDate } from "@/lib/dates";
@@ -536,7 +537,7 @@ function ApprovalsPanel() {
                 <div className="mt-0.5 text-[12px] text-muted [overflow-wrap:anywhere]">
                   {displayName(b.facultyName)}
                   {b.batchIds.length ? " · " + batchNames(b.batchIds) : ""}
-                  {b.seriesId ? " · weekly series" : ""}
+                  {b.seriesId ? " · " + seriesLabelOf(b).toLowerCase() : ""}
                 </div>
               </div>
 
