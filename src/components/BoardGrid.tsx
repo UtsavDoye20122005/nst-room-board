@@ -309,14 +309,39 @@ function Cell({
     );
   }
 
-  // ---------- lunch: free, but not really bookable in spirit ----------
+  // ---------- lunch: free, and bookable if a teacher wants it ----------
+  // Marked as lunch so nobody books over it without noticing, but not
+  // blocked: a makeup class or a lab that needs the extra hour is a
+  // real thing, and the board should not be the reason it cannot be
+  // put on. Styled apart from a normal free hour on purpose.
   if (isBreak) {
-    return (
+    const inner = (
+      <>
+        <span className="label-xs">Lunch</span>
+        {canBook ? (
+          <span className="font-mono text-[10.5px] uppercase tracking-[.06em] text-muted">+ book anyway</span>
+        ) : null}
+      </>
+    );
+
+    return canBook ? (
+      <button
+        className={
+          base +
+          " items-center justify-center border-dashed border-line-strong bg-transparent" +
+          " hover:border-free hover:bg-free-soft"
+        }
+        onClick={() => onBookSlot(room, slot)}
+        aria-label={"Book " + room.name + " over lunch"}
+      >
+        {inner}
+      </button>
+    ) : (
       <div
         className={base + " items-center justify-center border-dashed border-line-strong bg-transparent"}
         aria-label="Lunch break"
       >
-        <span className="label-xs">Lunch</span>
+        {inner}
       </div>
     );
   }
