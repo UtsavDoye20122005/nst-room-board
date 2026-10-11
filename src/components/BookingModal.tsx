@@ -12,7 +12,7 @@
 import { useMemo, useState } from "react";
 import { useAuth } from "@/lib/authContext";
 import { useCampus } from "@/lib/campusContext";
-import { BookingConflict, createBooking, createRecurringBooking } from "@/lib/db";
+import { BookingConflict, createBooking, createRecurringBooking, recurringDates, type RepeatMode } from "@/lib/db";
 import { notifyStudents } from "@/lib/notify";
 import { prettyDate, shiftDays, shortDate, weekdayName } from "@/lib/dates";
 import { formatDuration, SLOTS, slotRange } from "@/lib/slots";
@@ -102,8 +102,12 @@ export function BookingModal({
   const [batchIds, setBatchIds] = useState<string[]>([]);
   const [note, setNote] = useState("");
   const [sendSlack, setSendSlack] = useState(true);
-  const [repeatWeekly, setRepeatWeekly] = useState(false);
+  const [repeat, setRepeat] = useState<"none" | RepeatMode>("none");
   const [untilDate, setUntilDate] = useState(() => shiftDays(date, 7 * 15)); // ~one semester
+  const repeating = repeat !== "none";
+  // The exact dates this would book, from the same helper the write
+  // uses - so the count shown here is the count that happens.
+  const repeatDates = repeating ? recurringDates(date, untilDate, repeat) : [];
   const [splitRows, setSplitRows] = useState<SplitRow[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -158,7 +162,10 @@ export function BookingModal({
     if (!title.trim()) return setErr("Add a short description — it is what students see on the board.");
     if (batchIds.length === 0) return setErr("Pick at least one batch, or a whole year, for " + room.name + ".");
     if (endOptions.length === 0) return setErr("That hour is no longer free. Close this and pick another.");
-    if (repeatWeekly && untilDate < date) return setErr("The repeat-until date can't be before the first session.");
+    if (repeating && untilDate < date) return setErr("The repeat-until date can't be before the first session.");
+    if (repeating && repeatDates.length === 0) {
+      return setErr("That range contains no " + (repeat === "weekdays" ? "weekdays" : "dates") + " to book.");
+    }
     for (const row of splitRows) {
       const rn = rooms.find((r) => r.id === row.roomId)?.name || "one of the split rooms";
       if (!row.roomId) return setErr("Pick a room for every split row, or remove the empty one.");
@@ -203,13 +210,14 @@ export function BookingModal({
         };
 
         try {
-          if (repeatWeekly) {
-            const result = await createRecurringBooking(input, untilDate);
+          if (repeating) {
+            const unit = repeat === "weekly" ? "week" : "day";
+            const result = await createRecurringBooking(input, untilDate, repeat);
             if (result.bookedDates.length === 0) {
-              roomFailures.push(t.roomName + ": " + (result.skipped[0]?.reason || "no free week in that range"));
+              roomFailures.push(t.roomName + ": " + (result.skipped[0]?.reason || "no free " + unit + " in that range"));
             } else {
               roomResults.push(
-                t.roomName + " · " + result.bookedDates.length + " week" + (result.bookedDates.length === 1 ? "" : "s") +
+                t.roomName + " · " + result.bookedDates.length + " " + unit + (result.bookedDates.length === 1 ? "" : "s") +
                 (result.skipped.length ? " (" + result.skipped.length + " skipped)" : "")
               );
               if (result.firstBookingId) notifyIds.push(result.firstBookingId);
@@ -429,26 +437,29 @@ export function BookingModal({
         </div>
 
         <div className="rounded-lg border border-line bg-surface-2 p-3.5 sm:col-span-2">
-          <label className="flex cursor-pointer items-start gap-2.5">
-            <input
-              type="checkbox"
-              className="mt-0.5 accent-[var(--accent)]"
-              checked={repeatWeekly}
-              onChange={(e) => setRepeatWeekly(e.target.checked)}
-            />
-            <span className="text-[13.5px]">
-              Repeat weekly
-              <span className="mt-0.5 block text-[12px] text-muted">
-                Books this exact room and hours every {weekdayName(date)} until the date below — a whole
-                semester's timetable slot in one go. A week that clashes with something already booked is
-                skipped automatically; you'll see which ones.
-              </span>
-            </span>
+          <label className="block max-w-[280px]">
+            <span className="label-xs">Repeat</span>
+            <select
+              className="input mt-1.5"
+              value={repeat}
+              onChange={(e) => setRepeat(e.target.value as "none" | RepeatMode)}
+            >
+              <option value="none">Just this once</option>
+              <option value="weekly">Every {weekdayName(date)}</option>
+              <option value="weekdays">Every weekday (Mon–Fri)</option>
+              <option value="daily">Every day, weekends included</option>
+            </select>
           </label>
 
-          {repeatWeekly ? (
+          <p className="mt-2 text-[12px] text-muted">
+            {repeating
+              ? "Books this exact room and hours on each of those dates until the date below. Any that clash with something already booked are skipped automatically; you'll see which ones."
+              : "Books this room for this date only."}
+          </p>
+
+          {repeating ? (
             <label className="mt-3 block max-w-[220px]">
-              <span className="label-xs">Until (last {weekdayName(date)})</span>
+              <span className="label-xs">Until</span>
               <input
                 type="date"
                 className="input mt-1.5"
@@ -456,10 +467,20 @@ export function BookingModal({
                 min={date}
                 onChange={(e) => e.target.value && setUntilDate(e.target.value)}
               />
+              {/* The FIRST booked date, not `date` - a weekdays repeat
+                  started on a Saturday really begins that Monday, and
+                  showing the clicked date here would hide that. */}
               <span className="mt-1 block text-[12px] text-muted">
-                {shortDate(date)} to {shortDate(untilDate)} ={" "}
-                {Math.max(1, Math.floor((new Date(untilDate).getTime() - new Date(date).getTime()) / (7 * 86400000)) + 1)} weeks
+                {repeatDates.length
+                  ? shortDate(repeatDates[0]) + " to " + shortDate(repeatDates[repeatDates.length - 1]) +
+                    " = " + repeatDates.length + (repeatDates.length === 1 ? " session" : " sessions")
+                  : "No dates in that range."}
               </span>
+              {repeatDates.length > 60 ? (
+                <span className="mt-1 block text-[12px] font-medium text-pending">
+                  That's a lot of bookings in one go — double-check the until date.
+                </span>
+              ) : null}
             </label>
           ) : null}
         </div>

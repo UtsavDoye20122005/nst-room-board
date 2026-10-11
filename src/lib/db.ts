@@ -41,7 +41,7 @@ import {
 } from "firebase/firestore";
 import { getDb } from "./firebase";
 import { slotRange } from "./slots";
-import { shiftDays, shortDate, weekdayName } from "./dates";
+import { fromISO, shiftDays, shortDate, weekdayName } from "./dates";
 import type { Batch, Booking, Kind, Notice, Room, RosterEntry, SlotLock, UserProfile } from "./types";
 
 export function lockId(date: string, roomId: string, slot: number): string {
@@ -355,6 +355,39 @@ export async function createBooking(input: NewBookingInput): Promise<string> {
   return id;
 }
 
+/**
+ * How a repeating booking steps forward.
+ *
+ * "weekdays" exists because a college week is Mon-Fri: a plain daily
+ * repeat across a semester would otherwise litter every Saturday and
+ * Sunday with sessions nobody attends. "daily" is still there for the
+ * odd block that genuinely runs through a weekend.
+ */
+export type RepeatMode = "weekly" | "weekdays" | "daily";
+
+/**
+ * Every date a repeat lands on, first occurrence included. Shared by
+ * the booking write and the modal's "= N sessions" preview, so what a
+ * teacher is shown before confirming is the same list that gets
+ * booked, rather than two separate calculations that can drift.
+ */
+export function recurringDates(fromDate: string, untilDate: string, repeat: RepeatMode): string[] {
+  const dates: string[] = [];
+  const step = repeat === "weekly" ? 7 : 1;
+  // A semester of weekdays is ~110 days; this only guards against a
+  // runaway far-future "until" date, it is not a real limit.
+  const MAX = 400;
+
+  for (let d = fromDate; d <= untilDate && dates.length < MAX; d = shiftDays(d, step)) {
+    if (repeat === "weekdays") {
+      const day = fromISO(d).getDay();
+      if (day === 0 || day === 6) continue;
+    }
+    dates.push(d);
+  }
+  return dates;
+}
+
 export interface RecurringBookingResult {
   seriesId: string | null;
   firstBookingId: string | null;
@@ -383,10 +416,10 @@ export interface RecurringBookingResult {
 export async function createRecurringBooking(
   input: NewBookingInput,
   untilDate: string,
+  repeat: RepeatMode = "weekly",
   actor?: { uid: string; name: string }
 ): Promise<RecurringBookingResult> {
-  const dates: string[] = [];
-  for (let d = input.date; d <= untilDate; d = shiftDays(d, 7)) dates.push(d);
+  const dates = recurringDates(input.date, untilDate, repeat);
 
   if (dates.length === 0) {
     return { seriesId: null, firstBookingId: null, bookedDates: [], skipped: [] };
@@ -417,13 +450,17 @@ export async function createRecurringBooking(
   }
 
   if (bookedDates.length > 0 && firstBookingId) {
-    const weekday = weekdayName(input.date);
+    const cadence =
+      repeat === "weekly" ? "every " + weekdayName(input.date)
+      : repeat === "weekdays" ? "every weekday"
+      : "every day";
+    const unit = repeat === "weekly" ? "week" : "day";
     const text =
-      input.subject + " — " + input.title + " · " + input.roomName + " · every " + weekday + ", " +
+      input.subject + " — " + input.title + " · " + input.roomName + " · " + cadence + ", " +
       slotRange(input.startSlot, input.endSlot) + ", " + shortDate(bookedDates[0]) + " to " +
-      shortDate(bookedDates[bookedDates.length - 1]) + " (" + bookedDates.length + " week" +
+      shortDate(bookedDates[bookedDates.length - 1]) + " (" + bookedDates.length + " " + unit +
       (bookedDates.length === 1 ? "" : "s") + ")" +
-      (skipped.length ? " — " + skipped.length + " week" + (skipped.length === 1 ? "" : "s") + " skipped, already taken" : "");
+      (skipped.length ? " — " + skipped.length + " " + unit + (skipped.length === 1 ? "" : "s") + " skipped, already taken" : "");
 
     await addDoc(collection(getDb(), "notices"), noticeRecord({
       kind: "booked",
