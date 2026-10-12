@@ -5,9 +5,12 @@
 //
 //  Red   = taken. Shows the subject, a short description, the
 //          teacher's name and which batches are in there.
+//  Amber = booked by a teacher, waiting on an admin's sign-off.
 //  Green = free. A teacher can click it to book.
-//  Grey  = the session that was here got cancelled. The hour is
-//          free again, so a teacher can still book over it.
+//
+//  A cancelled session is simply not here: its hour is free, and
+//  reads and books as free. The day's cancellations are listed in
+//  the alerts strip above the grid instead.
 // ============================================================
 
 import { useEffect, useRef } from "react";
@@ -39,28 +42,28 @@ interface ColumnCell {
   slotIndex: number;
   span: number;
   taken?: Booking;
-  cancelled?: Booking;
 }
 
+/**
+ * A cancelled session leaves NO trace in the grid: its hour reads as
+ * free and books like any other, because that is exactly what it is.
+ * The board used to keep a grey struck-through box there, which said
+ * "room is free" while actually swallowing the click, so the one hour
+ * that genuinely was available looked the least available of all.
+ *
+ * Nothing is lost by dropping it - the day's cancellations are listed
+ * in the alerts strip above the grid, and they stay in Notices, in My
+ * bookings and in the cancellation email.
+ */
 function buildColumn(
   roomId: string,
   date: string,
-  occupant: (date: string, roomId: string, slot: number) => Booking | undefined,
-  anyAt: (date: string, roomId: string, slot: number) => Booking | undefined
+  occupant: (date: string, roomId: string, slot: number) => Booking | undefined
 ): Map<number, ColumnCell> {
   const bySlot = new Map<number, ColumnCell>();
   for (const slot of SLOTS) {
     const taken = occupant(date, roomId, slot.index);
-    if (taken) {
-      bySlot.set(slot.index, { slotIndex: slot.index, span: 1, taken });
-      continue;
-    }
-    const shadow = anyAt(date, roomId, slot.index);
-    if (shadow && shadow.status === "cancelled") {
-      bySlot.set(slot.index, { slotIndex: slot.index, span: 1, cancelled: shadow });
-      continue;
-    }
-    bySlot.set(slot.index, { slotIndex: slot.index, span: 1 });
+    bySlot.set(slot.index, { slotIndex: slot.index, span: 1, taken: taken || undefined });
   }
   return bySlot;
 }
@@ -75,14 +78,14 @@ export function BoardGrid({
   onBookSlot,
   onOpenSession,
 }: BoardGridProps) {
-  const { rooms, occupant, anyAt, batchNames } = useCampus();
+  const { rooms, occupant, batchNames } = useCampus();
   const nowSlot = date === todayISO() ? currentSlotIndex() : -1;
   const activeRooms = rooms.filter((r) => r.active);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   // One merged column per room, built once per render rather than once
   // per row - a multi-hour booking only needs to be looked up once.
-  const columns = new Map(activeRooms.map((r) => [r.id, buildColumn(r.id, date, occupant, anyAt)]));
+  const columns = new Map(activeRooms.map((r) => [r.id, buildColumn(r.id, date, occupant)]));
 
   useEffect(() => {
     if (!focusNonce) return;
@@ -168,8 +171,7 @@ export function BoardGrid({
                       room={room}
                       slot={slot.index}
                       taken={cell.taken}
-                      cancelled={cell.cancelled}
-                      isBreak={Boolean(slot.isBreak) && !cell.taken && !cell.cancelled}
+                      isBreak={Boolean(slot.isBreak) && !cell.taken}
                       canBook={canBook}
                       highlightBatchId={highlightBatchId}
                       filterBatchId={filterBatchId}
@@ -192,7 +194,6 @@ function Cell({
   room,
   slot,
   taken,
-  cancelled,
   isBreak,
   canBook,
   highlightBatchId,
@@ -204,7 +205,6 @@ function Cell({
   room: Room;
   slot: number;
   taken?: Booking;
-  cancelled?: Booking;
   /** This exact slot is free AND falls in the lunch window. */
   isBreak?: boolean;
   canBook: boolean;
@@ -275,37 +275,6 @@ function Cell({
           </span>
         ) : null}
       </button>
-    );
-  }
-
-  // ---------- cancelled shadow: grey, still bookable ----------
-  if (cancelled) {
-    const inner = (
-      <>
-        <span className="font-mono text-[9.5px] font-semibold uppercase tracking-[.1em] text-off">
-          Cancelled
-        </span>
-        <span className="text-[13px] font-semibold leading-tight line-through decoration-[1.5px] [overflow-wrap:anywhere]">
-          {cancelled.subject}
-        </span>
-        <span className="text-[11px] text-muted">{displayName(cancelled.facultyName)}</span>
-        {canBook ? (
-          <span className="mt-0.5 font-mono text-[9.5px] uppercase tracking-[.08em] text-free">
-            + room is free
-          </span>
-        ) : null}
-      </>
-    );
-
-    return canBook ? (
-      <button
-        className={base + " border-off-line bg-off-soft hover:border-free hover:bg-free-soft"}
-        onClick={() => onOpenSession(cancelled)}
-      >
-        {inner}
-      </button>
-    ) : (
-      <div className={base + " border-off-line bg-off-soft"}>{inner}</div>
     );
   }
 

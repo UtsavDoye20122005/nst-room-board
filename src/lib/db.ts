@@ -544,6 +544,119 @@ export async function createRecurringBooking(
   return { seriesId, firstBookingId, bookedDates, skipped };
 }
 
+/** The parts of a booking a teacher can edit after the fact. Room is
+ *  not here: moving rooms is its own flow, with its own notice. */
+export interface BookingEdit {
+  subject: string;
+  title: string;
+  kind: Kind;
+  note: string;
+  years: number[];
+  batchIds: string[];
+  startSlot: number;
+  endSlot: number;
+}
+
+/**
+ * Edits one session in place - what it is, who it is for, and when.
+ *
+ * Changing the hours is the delicate part: the old half-hours have to
+ * be released and the new ones claimed, which is the same conflict
+ * problem as booking in the first place, so it runs in one transaction
+ * with the same slotLock guard. Hours the booking already held are not
+ * treated as clashes with itself.
+ *
+ * slotLocks carry a copy of the subject, title and teacher name (the
+ * board shows them in "already taken by…" messages), so those are
+ * rewritten too - otherwise a renamed session would keep announcing
+ * its old name to whoever next tries that room.
+ *
+ * A notice goes out only when the HOURS move, because that is the part
+ * students have to act on; fixing a typo in the description should not
+ * push a notice to the whole campus.
+ */
+export async function updateBooking(
+  booking: Booking,
+  edit: BookingEdit,
+  roomName: string,
+  byUid: string,
+  byName: string
+): Promise<void> {
+  const db = getDb();
+  const timeChanged = edit.startSlot !== booking.startSlot || edit.endSlot !== booking.endSlot;
+  // A cancelled or displaced session holds no hours, so there is
+  // nothing to release or claim - only its fields change.
+  const holdsLocks = booking.status === "confirmed";
+
+  await runTransaction(db, async (tx) => {
+    const oldSlots: number[] = [];
+    for (let s = booking.startSlot; s <= booking.endSlot; s++) oldSlots.push(s);
+    const newSlots: number[] = [];
+    for (let s = edit.startSlot; s <= edit.endSlot; s++) newSlots.push(s);
+
+    // ---- reads first, as Firestore requires ----
+    const claiming = holdsLocks ? newSlots.filter((s) => !oldSlots.includes(s)) : [];
+    const claimSnaps = await Promise.all(
+      claiming.map((s) => tx.get(doc(db, "slotLocks", lockId(booking.date, booking.roomId, s))))
+    );
+    for (let i = 0; i < claimSnaps.length; i++) {
+      if (claimSnaps[i].exists()) {
+        const held = claimSnaps[i].data() as SlotLock;
+        throw new BookingConflict(
+          roomName + " is already taken at " + hourLabel(claiming[i]) +
+          ' — "' + held.title + '" (' + held.subject + ") by " + held.facultyName + "."
+        );
+      }
+    }
+
+    // ---- then writes ----
+    tx.update(doc(db, "bookings", booking.id), {
+      subject: edit.subject,
+      title: edit.title,
+      kind: edit.kind,
+      note: edit.note,
+      years: edit.years,
+      batchIds: edit.batchIds,
+      startSlot: edit.startSlot,
+      endSlot: edit.endSlot,
+      updatedAt: Date.now(),
+    });
+
+    if (holdsLocks) {
+      for (const s of oldSlots) {
+        if (!newSlots.includes(s)) tx.delete(doc(db, "slotLocks", lockId(booking.date, booking.roomId, s)));
+      }
+      for (const s of newSlots) {
+        tx.set(doc(db, "slotLocks", lockId(booking.date, booking.roomId, s)), {
+          bookingId: booking.id,
+          date: booking.date,
+          roomId: booking.roomId,
+          slot: s,
+          facultyUid: booking.facultyUid,
+          facultyName: booking.facultyName,
+          title: edit.title,
+          subject: edit.subject,
+        } satisfies SlotLock);
+      }
+    }
+
+    if (timeChanged) {
+      tx.set(doc(collection(db, "notices")), noticeRecord({
+        kind: "moved",
+        bookingId: booking.id,
+        text:
+          "TIME CHANGE — " + edit.subject + " (" + edit.title + ") in " + roomName + " on " +
+          shortDate(booking.date) + " moves from " + slotRange(booking.startSlot, booking.endSlot) +
+          " to " + slotRange(edit.startSlot, edit.endSlot),
+        batchIds: edit.batchIds,
+        years: edit.years,
+        byUid,
+        byName,
+      }));
+    }
+  });
+}
+
 /**
  * Marks a session cancelled and releases its hours so another
  * teacher can use the room. The booking stays on the board struck

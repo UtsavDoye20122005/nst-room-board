@@ -20,17 +20,19 @@ import {
   moveBooking,
   reinstateBooking,
   seriesLabelOf,
+  updateBooking,
 } from "@/lib/db";
 import { notifyStudents } from "@/lib/notify";
 import { clockTime, prettyDate, shortDate } from "@/lib/dates";
-import { formatDuration, slotRange } from "@/lib/slots";
+import { SLOTS, formatDuration, slotRange } from "@/lib/slots";
 import { yearLabel } from "@/lib/seedData";
-import type { Booking } from "@/lib/types";
+import type { Booking, Kind } from "@/lib/types";
 import { seatingLink } from "@/lib/links";
+import { BatchPicker } from "./BatchPicker";
 import { Modal } from "./Modal";
 import { useToast } from "./Toast";
 
-type Pane = "detail" | "move" | "cancel";
+type Pane = "detail" | "move" | "cancel" | "edit";
 
 export function SessionSheet({ booking, onClose }: { booking: Booking; onClose: () => void }) {
   const { profile } = useAuth();
@@ -45,6 +47,30 @@ export function SessionSheet({ booking, onClose }: { booking: Booking; onClose: 
   const [sendSlack, setSendSlack] = useState(true);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [cancelWholeSeries, setCancelWholeSeries] = useState(false);
+
+  // Edit pane. Seeded from the booking and only read while that pane
+  // is open, so reopening it always starts from what is actually saved.
+  const [eSubject, setESubject] = useState(booking.subject);
+  const [eTitle, setETitle] = useState(booking.title);
+  const [eKind, setEKind] = useState<Kind>(booking.kind);
+  const [eNote, setENote] = useState(booking.note || "");
+  const [eYears, setEYears] = useState<number[]>(booking.years || []);
+  const [eBatchIds, setEBatchIds] = useState<string[]>(booking.batchIds || []);
+  const [eStart, setEStart] = useState(booking.startSlot);
+  const [eEnd, setEEnd] = useState(booking.endSlot);
+
+  function openEdit() {
+    setESubject(booking.subject);
+    setETitle(booking.title);
+    setEKind(booking.kind);
+    setENote(booking.note || "");
+    setEYears(booking.years || []);
+    setEBatchIds(booking.batchIds || []);
+    setEStart(booking.startSlot);
+    setEEnd(booking.endSlot);
+    setErr(null);
+    setPane("edit");
+  }
 
   const room = roomById(booking.roomId);
   const isOwner = profile?.uid === booking.facultyUid;
@@ -154,6 +180,173 @@ export function SessionSheet({ booking, onClose }: { booking: Booking; onClose: 
           </label>
         )}
 
+      </Modal>
+    );
+  }
+
+  // ---------------- edit ----------------
+  if (pane === "edit") {
+    // Hours this session could run to without walking into somebody
+    // else. Its own current hours never count as a clash with itself.
+    const endChoices: number[] = [];
+    for (let s = eStart; s < SLOTS.length; s++) {
+      const held = occupant(booking.date, booking.roomId, s);
+      if (held && held.id !== booking.id) break;
+      endChoices.push(s);
+    }
+    const safeEnd = endChoices.includes(eEnd) ? eEnd : eStart;
+
+    return (
+      <Modal
+        title="Edit session"
+        subtitle={roomName(booking.roomId) + " · " + prettyDate(booking.date)}
+        onClose={onClose}
+        footer={
+          <>
+            <button className="btn" onClick={() => setPane("detail")} disabled={busy}>Back</button>
+            <button
+              className="btn btn-primary"
+              disabled={busy}
+              onClick={() =>
+                void withBusy(async () => {
+                  if (!eSubject.trim()) throw new Error("Which subject is this?");
+                  if (!eTitle.trim()) throw new Error("Add a short description — it is what students see.");
+                  if (eBatchIds.length === 0) throw new Error("Pick at least one batch, or a whole year.");
+
+                  const timeChanged = eStart !== booking.startSlot || safeEnd !== booking.endSlot;
+                  await updateBooking(
+                    booking,
+                    {
+                      subject: eSubject.trim(),
+                      title: eTitle.trim(),
+                      kind: eKind,
+                      note: eNote.trim(),
+                      years: eYears,
+                      batchIds: eBatchIds,
+                      startSlot: eStart,
+                      endSlot: safeEnd,
+                    },
+                    roomName(booking.roomId),
+                    profile!.uid,
+                    profile!.name
+                  );
+                  push("Session updated");
+                  // Only a time change is worth telling anyone about -
+                  // same rule the notice in db.ts follows.
+                  if (timeChanged) {
+                    const res = await notifyStudents(booking.id, "moved", undefined, sendSlack);
+                    push(res.message, res.ok ? "info" : "bad");
+                  }
+                  onClose();
+                })
+              }
+            >
+              {busy ? "Saving…" : "Save changes"}
+            </button>
+          </>
+        }
+      >
+        {err ? <div className="mb-4 rounded-lg border border-busy-line bg-busy-soft px-3 py-2 text-[13px]">{err}</div> : null}
+
+        {booking.seriesId ? (
+          <div className="mb-4 rounded-lg border border-moved-line bg-moved-soft px-3 py-2.5 text-[13px]">
+            <strong className="font-semibold">This is one session of a repeating series.</strong> Changes
+            here apply to this {shortDate(booking.date)} session only — the other sessions stay as they are.
+          </div>
+        ) : null}
+
+        <div className="grid gap-3.5 sm:grid-cols-2">
+          <label className="block">
+            <span className="label-xs">Subject</span>
+            <input className="input mt-1.5" value={eSubject} onChange={(e) => setESubject(e.target.value)} />
+          </label>
+
+          <label className="block">
+            <span className="label-xs">Type</span>
+            <select className="input mt-1.5" value={eKind} onChange={(e) => setEKind(e.target.value as Kind)}>
+              <option value="class">Class</option>
+              <option value="lab">Lab</option>
+              <option value="exam">Exam</option>
+              <option value="event">Event</option>
+            </select>
+          </label>
+
+          <label className="block sm:col-span-2">
+            <span className="label-xs">Short description</span>
+            <input className="input mt-1.5" value={eTitle} onChange={(e) => setETitle(e.target.value)} />
+          </label>
+
+          <label className="block">
+            <span className="label-xs">From</span>
+            <select
+              className="input mt-1.5"
+              value={eStart}
+              onChange={(e) => {
+                const next = Number(e.target.value);
+                setEStart(next);
+                if (next > eEnd) setEEnd(next);
+              }}
+            >
+              {SLOTS.map((s) => {
+                const held = occupant(booking.date, booking.roomId, s.index);
+                const taken = Boolean(held && held.id !== booking.id);
+                return (
+                  <option key={s.index} value={s.index} disabled={taken}>
+                    {s.start}{taken ? " — busy" : ""}
+                  </option>
+                );
+              })}
+            </select>
+          </label>
+
+          <label className="block">
+            <span className="label-xs">Until</span>
+            <select className="input mt-1.5" value={safeEnd} onChange={(e) => setEEnd(Number(e.target.value))}>
+              {endChoices.map((s) => (
+                <option key={s} value={s}>
+                  {SLOTS[s].end} ({formatDuration(eStart, s)})
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <div className="sm:col-span-2">
+            <span className="label-xs">Who is invited</span>
+            <div className="mt-2">
+              <BatchPicker
+                years={eYears}
+                batchIds={eBatchIds}
+                onChange={(next) => {
+                  setEYears(next.years);
+                  setEBatchIds(next.batchIds);
+                }}
+              />
+            </div>
+          </div>
+
+          <label className="block sm:col-span-2">
+            <span className="label-xs">Note for students (optional)</span>
+            <textarea
+              className="input mt-1.5 min-h-[70px] resize-y"
+              value={eNote}
+              onChange={(e) => setENote(e.target.value)}
+            />
+          </label>
+        </div>
+
+        <p className="mt-3 text-[13px] text-muted">
+          To change the room, use “Change room” instead. A notice goes out only if you change the hours.
+        </p>
+
+        {profile?.role === "admin" && (
+          <label className="mt-4 flex cursor-pointer items-start gap-2.5">
+            <input type="checkbox" className="mt-0.5 accent-[var(--accent)]" checked={sendSlack} onChange={(e) => setSendSlack(e.target.checked)} />
+            <span className="text-[13.5px]">
+              Post to Slack if the hours change
+              <span className="mt-0.5 block text-[12px] text-muted">On by default. Admin only.</span>
+            </span>
+          </label>
+        )}
       </Modal>
     );
   }
@@ -308,6 +501,12 @@ export function SessionSheet({ booking, onClose }: { booking: Booking; onClose: 
 
           <button className="btn" onClick={onClose} disabled={busy}>Close</button>
 
+          {/* Editable while cancelled too: fixing the details and then
+              putting it back on is the normal way to reschedule one. */}
+          {canEdit && cancelled ? (
+            <button className="btn" onClick={openEdit} disabled={busy}>Edit session</button>
+          ) : null}
+
           {canEdit && cancelled ? (
             <button
               className="btn btn-primary"
@@ -328,6 +527,7 @@ export function SessionSheet({ booking, onClose }: { booking: Booking; onClose: 
 
           {canEdit && !cancelled ? (
             <>
+              <button className="btn" onClick={openEdit}>Edit session</button>
               <button className="btn" onClick={() => setPane("move")}>Change room</button>
               <button className="btn btn-danger" onClick={() => setPane("cancel")}>Cancel session</button>
             </>

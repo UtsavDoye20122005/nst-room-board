@@ -6,7 +6,9 @@ export function Legend({ canBook }: { canBook: boolean }) {
     { cls: "border-busy-line bg-busy-soft", label: "Taken" },
     { cls: "border-exam-line bg-exam-soft", label: "Exam" },
     { cls: "border-dashed border-pending-line bg-pending-soft", label: "Awaiting approval" },
-    { cls: "border-off-line bg-off-soft", label: "Cancelled" },
+    // No "Cancelled" swatch: a cancelled session leaves nothing in the
+    // grid at all, so a colour for it would point at something that is
+    // never there. Cancellations show in the alerts strip instead.
   ];
   return (
     <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-[var(--radius)] border border-line bg-surface px-3.5 py-2.5">
